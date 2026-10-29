@@ -1,0 +1,12 @@
+{
+    "IGUI_CSB_StudyBuilding": "Study building",
+    "IGUI_CSB_StudyTooltip": "Look the building over and learn it, so you can build a copy of it somewhere else.",
+    "IGUI_CSB_AlreadyKnown": "You already know this building.",
+    "IGUI_CSB_NotLoaded": "Part of the building is too far away. Get closer and try again.",
+    "IGUI_CSB_StudyFailed": "There is nothing here to study.",
+    "IGUI_CSB_Learned": "Learned: %1",
+    "IGUI_CSB_BuildMenu": "Build studied building",
+    "IGUI_CSB_Size": "%1 x %2, %3 levels",
+    "IGUI_CSB_Built": "Built: %1",
+    "IGUI_CSB_UndoLast": "Undo last spawned building"
+}
