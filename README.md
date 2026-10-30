@@ -4,6 +4,7 @@ Project Zomboid (Build 42) mod: study a building you find on the map, then build
 
 - Right-click a building (or one of its walls) and choose **Study building**. Your character looks it over with the plans in hand; bigger buildings take longer.
 - Under a roof that is not part of a building (carport, porch roof, shelter), choose **Study structure** instead.
+- You can right-click a roof or an upper floor where you see it: one level up is drawn 3 squares further north-west on screen, so the click lands on the ground square 3 squares north-west of the roof, and the mod looks there too (`CSB.screenStack`).
 - Right-click anywhere and choose **Build studied building**, then pick one. A see-through copy follows the cursor, green where it fits and red where it does not. Click to build it.
 - In debug mode, **Undo last spawned building** takes the last copy down again.
 

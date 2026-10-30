@@ -163,9 +163,46 @@ function CSB.Capture.study(def)
     return blueprint(tiles, groundZ, x1 .. "_" .. y1, CSB.buildingName(groundRooms), area)
 end
 
+-- The square and the 8 around it, nearest first.
+local NEAR = { { 0, 0 }, { 0, -1 }, { -1, 0 }, { 1, 0 }, { 0, 1 }, { -1, -1 }, { 1, -1 }, { -1, 1 }, { 1, 1 } }
+
+local function defOf(sq)
+    local building = sq and sq:getBuilding()
+    return building and building:getDef() or nil
+end
+
+--[[
+    The building the player clicked on, from the square the click landed on:
+      * the square's own building;
+      * the building west, north or north-west of it, whose east or south
+        wall stands on the square;
+      * a building drawn at the click from a level above (CSB.screenStack):
+        an upper floor, or a roof over the building's column.
+    Returns the BuildingDef, or nil.
+--]]
+function CSB.Capture.buildingAt(sq)
+    local cell = getCell()
+    local x, y, z = sq:getX(), sq:getY(), sq:getZ()
+    local def = defOf(sq)
+    if def then return def end
+    for _, d in ipairs({ { -1, 0 }, { 0, -1 }, { -1, -1 } }) do
+        def = defOf(cell:getGridSquare(x + d[1], y + d[2], z))
+        if def then return def end
+    end
+    for _, p in ipairs(CSB.screenStack(x, y, z, CSB.ROOF_LEVELS)) do
+        local above = p.up > 0 and cell:getGridSquare(p.x, p.y, p.z)
+        if above and above:getObjects():size() > 0 then
+            def = defOf(above) or defOf(cell:getGridSquare(p.x, p.y, z))
+            if def then return def end
+        end
+    end
+    return nil
+end
+
 --[[
     Finds the structure over a square: a roof right above it or above a
-    square next to it, followed to its edges (CSB.roofColumns). Returns
+    square next to it, or drawn where the player clicked, followed to its
+    edges (CSB.roofColumns). Returns
         { id, groundZ, topZ, x1, y1, x2, y2, columns, count }
     or nil and why ("noRoof", "partOfBuilding", "tooBig").
 --]]
@@ -197,12 +234,20 @@ function CSB.Capture.findStructure(sq)
         return roofLevels[k] or nil
     end
 
+    -- Where to start: a roof straight over the square or a square next to
+    -- it, or the roof drawn where the player clicked (CSB.screenStack), which
+    -- has to be on the level drawn there.
     local sx, sy
-    for _, d in ipairs({ { 0, 0 }, { 0, -1 }, { -1, 0 }, { 1, 0 }, { 0, 1 }, { -1, -1 }, { 1, -1 }, { -1, 1 }, { 1, 1 } }) do
-        if roofAt(sq:getX() + d[1], sq:getY() + d[2]) then
-            sx, sy = sq:getX() + d[1], sq:getY() + d[2]
-            break
+    for _, p in ipairs(CSB.screenStack(sq:getX(), sq:getY(), groundZ, CSB.ROOF_LEVELS)) do
+        for _, d in ipairs(NEAR) do
+            local x, y = p.x + d[1], p.y + d[2]
+            local level = roofAt(x, y)
+            if level and (p.up == 0 or level == p.z) then
+                sx, sy = x, y
+                break
+            end
         end
+        if sx then break end
     end
     if not sx then return nil, "noRoof" end
 

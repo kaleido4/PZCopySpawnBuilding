@@ -55,8 +55,24 @@ CSB.SKIP_PREFIXES = { "overlay_blood", "e_", "f_", "d_", "vegetation_", "blends_
 -- Ground floors that are just the land: grass and dirt.
 CSB.NATURAL_FLOOR_PREFIX = "blends_natural"
 
+-- On screen, one level up is drawn 3 squares further north-west
+-- (IsoUtils.YToScreen, B42.22: 32 px per square of x or y, 192 px per level).
+CSB.LEVEL_SHIFT = 3
+
 function CSB.key(x, y)
     return x * 100000 + y
+end
+
+-- The squares drawn at the same screen point as square (x, y, z), from that
+-- level up: a click on a roof lands on the ground square 3 squares north-west
+-- of the roof piece. Returns { { x, y, z, up = levels above z } ... }.
+function CSB.screenStack(x, y, z, levels)
+    local stack = {}
+    for up = 0, levels do
+        local shift = up * CSB.LEVEL_SHIFT
+        table.insert(stack, { x = x + shift, y = y + shift, z = z + up, up = up })
+    end
+    return stack
 end
 
 -- Rooms that make a building a house, whatever its biggest room is.

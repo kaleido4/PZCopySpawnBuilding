@@ -139,6 +139,23 @@ test("study time comes from the ground floor area", function()
     eq(CSB.Capture.area(buildBarn()), 6)
 end)
 
+test("a click on the building's floor or on its east wall finds it", function()
+    local def = buildBarn()
+    eq(CSB.Capture.buildingAt(square(11, 21, 0)), def, "floor")
+    eq(CSB.Capture.buildingAt(square(13, 21, 0)), def, "east wall, on the square outside")
+end)
+
+test("a click on the building's roof as drawn on screen finds it", function()
+    local def = buildBarn()
+    -- the roof over 11,21 on level 1 is drawn over ground square 8,18
+    eq(CSB.Capture.buildingAt(square(8, 18, 0)), def)
+end)
+
+test("a click on open ground finds no building", function()
+    buildBarn()
+    eq(CSB.Capture.buildingAt(square(15, 24, 0)), nil)
+end)
+
 ---------------------------------------------------------------------------
 -- Structures: a roof with no rooms under it
 ---------------------------------------------------------------------------
@@ -197,6 +214,22 @@ test("a roof next to the square clicked counts too", function()
     buildCarport()
     local found = CSB.Capture.findStructure(square(26, 27, 0))
     eq(found.id, "s_25_25")
+end)
+
+test("a click on the carport's roof as drawn on screen finds it", function()
+    buildCarport()
+    -- the roof over 26,26 on level 1 is drawn over ground square 23,23
+    local found = CSB.Capture.findStructure(square(23, 23, 0))
+    eq(found and found.id, "s_25_25")
+    found = CSB.Capture.findStructure(square(22, 22, 0))
+    eq(found and found.id, "s_25_25", "its north-west corner")
+end)
+
+test("a roof drawn at the click from another level does not count", function()
+    buildCarport()
+    -- 2 levels up from 20,20 is 26,26, but the carport roof there is on level 1
+    local found, why = CSB.Capture.findStructure(square(20, 20, 0))
+    eq(found, nil) eq(why, "noRoof")
 end)
 
 test("no roof, no structure", function()
