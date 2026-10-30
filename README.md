@@ -6,7 +6,9 @@ Project Zomboid (Build 42) mod: study a building you find on the map, then build
 - Under a roof that is not part of a building (carport, porch roof, shelter), choose **Study structure** instead.
 - You can right-click a roof or an upper floor where you see it: one level up is drawn 3 squares further north-west on screen, so the click lands on the ground square 3 squares north-west of the roof, and the mod looks there too (`CSB.screenStack`).
 - Right-click anywhere and choose **Build studied building**, then pick one. A see-through copy follows the cursor, green where it fits and red where it does not. Click to build it.
-- In debug mode, **Undo last spawned building** takes the last copy down again.
+- Right-click a copy you built (on it, next to it, or on its roof) and choose **Remove spawned building** to take it down again and put the ground back.
+- **Forget studied building** takes a building off your list.
+- Already know a building and studying it again? That updates what you know. Buildings learned with an older version of the mod are updated by themselves: once a game minute, when the original is loaded nearby, it is studied again and "Updated what you know" shows (`CSB_Update.lua`, `CSB.CAPTURE_VERSION`).
 
 Work in progress (milestone 1 of 4): building is free and single player only. Planned next: a Buildings tab in the build window (vanilla and Neat Building), sizes and materials with costs, sandbox options, multiplayer, rotation.
 
@@ -65,11 +67,13 @@ While placing, the copy's footprint is highlighted on the ground under the mouse
 
 The see-through building stands on the footprint; its upper levels and roof are drawn fainter so the footprint shows through.
 
-When the copy is built, everything on the ground squares it uses is removed except the floor: plants, trees, fences, furniture, walls players built, containers with what is in them, and items lying there (deleted, not moved). On the squares above the ground it uses, everything is removed. Then floors replace the grass. Undo does not bring any of it back.
+When the copy is built, everything on the ground squares it uses is removed except the floor: plants, trees, fences, furniture, walls players built, containers with what is in them, and items lying there (deleted, not moved). On the squares above the ground it uses, everything is removed. Then floors replace the grass. Removing the copy puts the ground floors back, but not what was cleared.
+
+Every copy built is kept in the save's global mod data (`spawned`), with each piece and the ground floors it replaced, so **Remove spawned building** works on any copy, any time later.
 
 ### Roofs, rain and animals
 
-A square counts as roofed (`IsoGridSquare.haveRoof`) when a floor or a rain-blocking tile (roof tiles have `BlockRain`) is somewhere above it, and a roofed square is not outside. The game only rechecks this when a floor is added or something is removed, so after building, the mod does what the game's own building code does (`buildRecipeCode.lua`): `IsoCell:checkHaveRoof` for every column of the copy, and `DesignationZoneAnimal.addNewRoof` for its roof pieces. Undo rechecks the columns too.
+A square counts as roofed (`IsoGridSquare.haveRoof`) when a floor or a rain-blocking tile (roof tiles have `BlockRain`) is somewhere above it, and a roofed square is not outside. The game only rechecks this when a floor is added or something is removed, so after building, the mod does what the game's own building code does (`buildRecipeCode.lua`): `IsoCell:checkHaveRoof` for every column of the copy, and `DesignationZoneAnimal.addNewRoof` for its roof pieces. Removing a copy rechecks the columns too.
 
 Rooms do not matter for this: a copied carport or shelter is a roof over animals' heads. Under it (B42.22):
 
@@ -85,7 +89,8 @@ Pieces are made the way the map loader and the moveables code make them: doors a
 |---|---|
 | `shared/CopySpawnBuilding/CSB_Core.lua` | rules: what is structure, what belongs, where a copy fits (unit-tested) |
 | `shared/CopySpawnBuilding/CSB_Capture.lua` | studying: reads a building into a blueprint |
-| `shared/CopySpawnBuilding/CSB_Spawn.lua` | building and undoing a copy |
+| `shared/CopySpawnBuilding/CSB_Spawn.lua` | building, finding and removing a copy |
+| `client/CopySpawnBuilding/CSB_Update.lua` | studies outdated blueprints again from their originals |
 | `shared/CopySpawnBuilding/CSB_Store.lua` | blueprints in global mod data, known buildings on the character |
 | `client/CopySpawnBuilding/CSB_StudyAction.lua` | the Study building timed action |
 | `client/CopySpawnBuilding/CSB_ContextMenu.lua` | right-click options |

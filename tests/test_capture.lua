@@ -335,6 +335,49 @@ test("studying it copies from the ground: roof, posts and the pad under the roof
 end)
 
 ---------------------------------------------------------------------------
+-- Bringing old blueprints up to the current rules
+---------------------------------------------------------------------------
+
+test("a new blueprint says which rules made it and where its original is", function()
+    local def = buildRoofRoomCarport()
+    local bp = CSB.Capture.study(def, 0)
+    eq(bp.v, CSB.CAPTURE_VERSION)
+    eq(bp.src.kind, "building")
+    eq(bp.src.x, 45) eq(bp.src.y, 30) eq(bp.src.z, 1, "its room is up at the roof")
+end)
+
+test("an old blueprint of the carport is studied again from its original", function()
+    buildRoofRoomCarport()
+    -- what the first version kept: no v, no src, only the floor
+    local old = { id = "45_30", name = "Shelter", tiles = { { x = 0, y = 0, z = 0, s = "blends_street_01_80", k = "floor" } } }
+    local new = CSB.Capture.restudy(old)
+    eq(new.id, "45_30")
+    eq(new.v, CSB.CAPTURE_VERSION)
+    eq(countSprite(new, "roofs_30_10_16"), 16, "roof")
+    eq(countSprite(new, "fixtures_railings_01_73"), 4, "posts")
+end)
+
+test("an old structure blueprint is studied again from its roof", function()
+    buildCarport()
+    local new = CSB.Capture.restudy({ id = "s_25_25", name = "Shelter", tiles = {} })
+    eq(new.id, "s_25_25")
+    eq(countSprite(new, "roof"), 6)
+end)
+
+test("a blueprint whose original is not loaded waits", function()
+    local def = buildRoofRoomCarport()
+    def.loaded = false
+    local new, why = CSB.Capture.restudy({ id = "45_30", name = "Shelter", tiles = {} })
+    eq(new, nil) eq(why, "away")
+end)
+
+test("a blueprint whose original is gone is left as it is", function()
+    buildRoofRoomCarport()
+    local new, why = CSB.Capture.restudy({ id = "900_900", name = "Shed", tiles = {} })
+    eq(new, nil) eq(why, "gone")
+end)
+
+---------------------------------------------------------------------------
 -- An L-shaped house with a porch (an emptyoutside room on the ground)
 ---------------------------------------------------------------------------
 

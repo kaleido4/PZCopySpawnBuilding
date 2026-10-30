@@ -1,5 +1,6 @@
 dofile(ROOT .. "/tests/harness.lua")
 dofile(MOD .. "shared/CopySpawnBuilding/CSB_Core.lua")
+dofile(MOD .. "shared/CopySpawnBuilding/CSB_Store.lua")
 dofile(MOD .. "shared/CopySpawnBuilding/CSB_Spawn.lua")
 
 print("CSB_Spawn")
@@ -202,6 +203,52 @@ test("after undo the squares are not roofed anymore", function()
     CSB.Spawn.undo(record)
     falsy(square(4, 4, 0).haveRoof)
     falsy(square(5, 4, 0).haveRoof)
+end)
+
+---------------------------------------------------------------------------
+-- Copies built are kept, so they can be removed later
+---------------------------------------------------------------------------
+
+local function build(ox, oy)
+    local record = CSB.Spawn.place(SHED, ox, oy, 0)
+    CSB.Store.addSpawn(record)
+    return record
+end
+
+test("a copy built is kept with its name and where it stands", function()
+    field()
+    local record = build(4, 4)
+    truthy(record.sid, "sid")
+    eq(CSB.Store.spawns()[record.sid], record)
+    eq(record.name, "Shed") eq(record.ox, 4) eq(record.oy, 4) eq(record.oz, 0)
+end)
+
+test("a click on a copy, next to it, or on its roof as drawn finds it", function()
+    field()
+    local record = build(4, 4)
+    eq(CSB.Spawn.copyAt(square(5, 4, 0)), record, "on it")
+    eq(CSB.Spawn.copyAt(square(3, 4, 0)), record, "next to it")
+    -- the roof over 4,4 on level 1 is drawn over ground square 1,1
+    eq(CSB.Spawn.copyAt(square(1, 1, 0)), record, "on its roof as drawn")
+    eq(CSB.Spawn.copyAt(square(9, 9, 0)), nil, "away from it")
+end)
+
+test("two copies are told apart", function()
+    field()
+    local first = build(0, 0)
+    local second = build(5, 6)
+    eq(CSB.Spawn.copyAt(square(1, 0, 0)), first)
+    eq(CSB.Spawn.copyAt(square(6, 6, 0)), second)
+end)
+
+test("removing a copy takes it down, puts the grass back and forgets it", function()
+    field()
+    local record = build(4, 4)
+    CSB.Spawn.remove(record)
+    eq(spritesAt(4, 4, 0), "grass")
+    eq(spritesAt(4, 4, 1), "")
+    eq(CSB.Store.spawns()[record.sid], nil, "record gone")
+    eq(CSB.Spawn.copyAt(square(4, 4, 0)), nil, "nothing to click on anymore")
 end)
 
 test("undo takes the copy down and puts the grass back", function()

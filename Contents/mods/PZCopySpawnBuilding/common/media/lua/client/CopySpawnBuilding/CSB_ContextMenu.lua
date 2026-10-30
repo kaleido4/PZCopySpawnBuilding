@@ -4,9 +4,11 @@
         its upper floors and roof as drawn on screen (CSB.Capture.buildingAt);
       * "Study structure" on or under a roof that is not part of a building
         (carport, porch roof, shelter);
+      * "Remove spawned building" on or next to a copy that was built
+        (CSB.Spawn.copyAt);
       * "Build studied building" with the buildings the character knows, which
         starts the placement cursor (CSB_Cursor.lua);
-      * in debug mode, "Undo last spawned building".
+      * "Forget studied building" to take one off that list.
 --]]
 
 require "CopySpawnBuilding/CSB_Store"
@@ -52,10 +54,23 @@ function CSB.Menu.onBuild(player, bp)
     getCell():setDrag(CSB_Cursor:new(player, bp), player:getPlayerNum())
 end
 
-function CSB.Menu.onUndo(player)
-    if CSB.lastSpawn then
-        CSB.Spawn.undo(CSB.lastSpawn)
-        CSB.lastSpawn = nil
+function CSB.Menu.onRemove(player, record)
+    CSB.Spawn.remove(record)
+    player:setHaloNote(getText("IGUI_CSB_Removed", record.name or ""))
+end
+
+function CSB.Menu.onForget(player, bp)
+    CSB.Store.forget(player, bp.id)
+    player:setHaloNote(getText("IGUI_CSB_Forgot", bp.name))
+end
+
+-- A submenu with one option per known building.
+local function knownSubMenu(context, player, text, onPick, known)
+    local parent = context:addOption(getText(text))
+    local subMenu = ISContextMenu:getNew(context)
+    context:addSubMenu(parent, subMenu)
+    for _, bp in ipairs(known) do
+        subMenu:addOption(bp.name .. " (" .. describe(bp) .. ")", player, onPick, bp)
     end
 end
 
@@ -79,18 +94,18 @@ function CSB.Menu.fill(playerNum, context, worldobjects, test)
         end
     end
 
-    local known = CSB.Store.list(player)
-    if #known > 0 then
-        local parent = context:addOption(getText("IGUI_CSB_BuildMenu"))
-        local subMenu = ISContextMenu:getNew(context)
-        context:addSubMenu(parent, subMenu)
-        for _, bp in ipairs(known) do
-            subMenu:addOption(bp.name .. " (" .. describe(bp) .. ")", player, CSB.Menu.onBuild, bp)
-        end
+    local copy = square and CSB.Spawn.copyAt(square)
+    if copy then
+        local option = context:addOption(getText("IGUI_CSB_RemoveCopy", copy.name or ""), player, CSB.Menu.onRemove, copy)
+        local tooltip = ISWorldObjectContextMenu.addToolTip()
+        tooltip.description = getText("IGUI_CSB_RemoveCopyTooltip")
+        option.toolTip = tooltip
     end
 
-    if isDebugEnabled() and CSB.lastSpawn then
-        context:addOption(getText("IGUI_CSB_UndoLast"), player, CSB.Menu.onUndo)
+    local known = CSB.Store.list(player)
+    if #known > 0 then
+        knownSubMenu(context, player, "IGUI_CSB_BuildMenu", CSB.Menu.onBuild, known)
+        knownSubMenu(context, player, "IGUI_CSB_ForgetMenu", CSB.Menu.onForget, known)
     end
 end
 

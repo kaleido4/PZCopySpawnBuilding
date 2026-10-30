@@ -10,7 +10,11 @@
     "IGUI_CSB_Learned": "Learned: %1",
     "IGUI_CSB_Updated": "Updated what you know: %1",
     "IGUI_CSB_BuildMenu": "Build studied building",
+    "IGUI_CSB_ForgetMenu": "Forget studied building",
+    "IGUI_CSB_Forgot": "Forgot: %1",
     "IGUI_CSB_Size": "%1 x %2, %3 levels",
     "IGUI_CSB_Built": "Built: %1",
-    "IGUI_CSB_UndoLast": "Undo last spawned building"
+    "IGUI_CSB_RemoveCopy": "Remove spawned building (%1)",
+    "IGUI_CSB_RemoveCopyTooltip": "Takes this copy down and puts the ground back. Whatever was cleared to build it does not come back.",
+    "IGUI_CSB_Removed": "Removed: %1"
 }

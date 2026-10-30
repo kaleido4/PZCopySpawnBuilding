@@ -148,8 +148,14 @@ IsoWindowFrame = { new = function(cell, sq, sprite, north) return made("IsoWindo
 local world
 
 function resetWorld()
-    world = { squares = {}, defs = {}, newRoofs = {} }
+    world = { squares = {}, defs = {}, newRoofs = {}, modData = {} }
 end
+
+-- Global mod data, kept with the world (a new world, a new save).
+ModData = { getOrCreate = function(key)
+    world.modData[key] = world.modData[key] or {}
+    return world.modData[key]
+end }
 
 function newRoofs()
     return table.concat(world.newRoofs, " ")

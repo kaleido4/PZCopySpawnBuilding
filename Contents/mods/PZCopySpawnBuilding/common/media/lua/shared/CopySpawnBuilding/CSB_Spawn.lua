@@ -17,6 +17,7 @@
 --]]
 
 require "CopySpawnBuilding/CSB_Core"
+require "CopySpawnBuilding/CSB_Store"
 
 CSB.Spawn = {}
 
@@ -129,13 +130,15 @@ end
 
 --[[
     Builds the copy with its box starting at (ox, oy, oz). Returns a record of
-    what was done, for CSB.Spawn.undo:
-        placed   { x, y, z, s } of every piece, in the order they were added
-        ground   [ "x,y" ] = sprite of the ground floor a copy floor replaced
+    what was done, for CSB.Spawn.undo (kept by CSB.Store.addSpawn):
+        id, name     the blueprint's
+        ox, oy, oz   where the copy's box starts
+        placed       { x, y, z, s } of every piece, in the order they were added
+        ground       [ "x,y" ] = sprite of the ground floor a copy floor replaced
 --]]
 function CSB.Spawn.place(bp, ox, oy, oz)
     local cell = getCell()
-    local record = { id = bp.id, placed = {}, ground = {} }
+    local record = { id = bp.id, name = bp.name, ox = ox, oy = oy, oz = oz, placed = {}, ground = {} }
     local touched = {}
 
     local fp = footprint(bp)
@@ -238,4 +241,44 @@ function CSB.Spawn.undo(record)
     for _, sq in pairs(columns) do
         cell:checkHaveRoof(sq:getX(), sq:getY())
     end
+end
+
+-- Takes a kept copy down (CSB.Spawn.undo) and forgets its record.
+function CSB.Spawn.remove(record)
+    CSB.Spawn.undo(record)
+    if record.sid then CSB.Store.removeSpawn(record.sid) end
+end
+
+-- The columns a copy's pieces stand on, worked out once per record.
+local copyColumns = {}
+
+local function columnsOf(record)
+    local cols = copyColumns[record.sid]
+    if not cols or cols.placed ~= record.placed then
+        cols = { placed = record.placed, set = {} }
+        for _, p in ipairs(record.placed) do
+            cols.set[CSB.key(p.x, p.y)] = true
+        end
+        copyColumns[record.sid] = cols
+    end
+    return cols.set
+end
+
+-- The square and the 8 around it, nearest first.
+local NEAR = { { 0, 0 }, { 0, -1 }, { -1, 0 }, { 1, 0 }, { 0, 1 }, { -1, -1 }, { 1, -1 }, { -1, 1 }, { 1, 1 } }
+
+-- The kept copy the player clicked on: one with a piece on the square
+-- clicked or next to it, or drawn there from a level above (CSB.screenStack).
+-- Returns its record, or nil.
+function CSB.Spawn.copyAt(sq)
+    local stack = CSB.screenStack(sq:getX(), sq:getY(), sq:getZ(), CSB.ROOF_LEVELS)
+    for _, d in ipairs(NEAR) do
+        for _, p in ipairs(stack) do
+            local k = CSB.key(p.x + d[1], p.y + d[2])
+            for _, record in pairs(CSB.Store.spawns()) do
+                if columnsOf(record)[k] then return record end
+            end
+        end
+    end
+    return nil
 end

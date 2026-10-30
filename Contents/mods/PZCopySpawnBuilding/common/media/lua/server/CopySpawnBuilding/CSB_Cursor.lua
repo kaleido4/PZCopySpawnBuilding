@@ -94,7 +94,7 @@ end
 function CSB_Cursor:create(x, y, z, north, sprite)
     local ox, oy = CSB.origin(self.bp, x, y)
     if CSB.Spawn.problem(self.bp, ox, oy, z) then return end
-    CSB.lastSpawn = CSB.Spawn.place(self.bp, ox, oy, z)
+    CSB.Store.addSpawn(CSB.Spawn.place(self.bp, ox, oy, z))
     self.character:setHaloNote(getText("IGUI_CSB_Built", self.bp.name))
 end
 

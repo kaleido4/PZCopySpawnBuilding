@@ -6,7 +6,11 @@
     kept on the character, like learned recipes: a new character starts with
     none, and studying a building again on the same spot reuses its blueprint.
 
+    Every copy built is kept too, so it can be taken down again later.
+
         ModData "CopySpawnBuilding".blueprints[id] = blueprint (see CSB_Core.lua)
+        ModData "CopySpawnBuilding".spawned[sid] = copy record (see CSB.Spawn.place)
+        ModData "CopySpawnBuilding".nextSpawn = number for the next sid
         player mod data CopySpawnBuilding.known[id] = true
 --]]
 
@@ -19,7 +23,27 @@ local KEY = "CopySpawnBuilding"
 function CSB.Store.data()
     local data = ModData.getOrCreate(KEY)
     data.blueprints = data.blueprints or {}
+    data.spawned = data.spawned or {}
+    data.nextSpawn = data.nextSpawn or 1
     return data
+end
+
+-- Keeps the record of a copy that was built; gives it its sid.
+function CSB.Store.addSpawn(record)
+    local data = CSB.Store.data()
+    record.sid = "c" .. data.nextSpawn
+    data.nextSpawn = data.nextSpawn + 1
+    data.spawned[record.sid] = record
+    return record.sid
+end
+
+function CSB.Store.removeSpawn(sid)
+    CSB.Store.data().spawned[sid] = nil
+end
+
+-- The records of the copies built: { [sid] = record }
+function CSB.Store.spawns()
+    return CSB.Store.data().spawned
 end
 
 function CSB.Store.put(bp)
