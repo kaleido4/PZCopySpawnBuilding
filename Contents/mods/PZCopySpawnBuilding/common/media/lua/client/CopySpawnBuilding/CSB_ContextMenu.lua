@@ -2,6 +2,8 @@
     Copy Spawn Building - right-click menu:
       * "Study building" on a building (its walls included: the east and south
         walls stand on the squares just outside it);
+      * "Study structure" under a roof that is not part of a building
+        (carport, porch roof, shelter);
       * "Build studied building" with the buildings the character knows, which
         starts the placement cursor (CSB_Cursor.lua);
       * in debug mode, "Undo last spawned building".
@@ -29,14 +31,38 @@ local function buildingAt(worldobjects)
     return nil
 end
 
+local function clickedSquare(worldobjects)
+    for _, obj in ipairs(worldobjects) do
+        local sq = obj:getSquare()
+        if sq then return sq end
+    end
+    return nil
+end
+
 local function describe(bp)
     return getText("IGUI_CSB_Size", bp.w, bp.h, bp.levels)
 end
 
-function CSB.Menu.onStudy(player, def, square)
+-- target: { def = BuildingDef } or { structure = found }, see CSB_StudyAction
+function CSB.Menu.onStudy(player, target, square)
     if luautils.walkAdj(player, square, true) then
-        ISTimedActionQueue.add(CSB_StudyAction:new(player, def, square))
+        ISTimedActionQueue.add(CSB_StudyAction:new(player, target, square))
     end
+end
+
+local function addStudyOption(context, player, text, target, square, id, problem)
+    local option = context:addOption(getText(text), player, CSB.Menu.onStudy, target, square)
+    local tooltip = ISWorldObjectContextMenu.addToolTip()
+    if problem then
+        option.notAvailable = true
+        tooltip.description = getText(problem)
+    elseif id and CSB.Store.knows(player, id) then
+        option.notAvailable = true
+        tooltip.description = getText("IGUI_CSB_AlreadyKnown")
+    else
+        tooltip.description = getText(text .. "Tooltip")
+    end
+    option.toolTip = tooltip
 end
 
 function CSB.Menu.onBuild(player, bp)
@@ -57,19 +83,18 @@ function CSB.Menu.fill(playerNum, context, worldobjects, test)
 
     local def, square = buildingAt(worldobjects)
     if def then
-        local option = context:addOption(getText("IGUI_CSB_StudyBuilding"), player, CSB.Menu.onStudy, def, square)
-        local tooltip = ISWorldObjectContextMenu.addToolTip()
-        local id = def:getX() .. "_" .. def:getY()
-        if CSB.Store.knows(player, id) then
-            option.notAvailable = true
-            tooltip.description = getText("IGUI_CSB_AlreadyKnown")
-        elseif not def:isFullyStreamedIn() then
-            option.notAvailable = true
-            tooltip.description = getText("IGUI_CSB_NotLoaded")
-        else
-            tooltip.description = getText("IGUI_CSB_StudyTooltip")
+        local problem = not def:isFullyStreamedIn() and "IGUI_CSB_NotLoaded" or nil
+        addStudyOption(context, player, "IGUI_CSB_StudyBuilding", { def = def }, square,
+            def:getX() .. "_" .. def:getY(), problem)
+    else
+        square = clickedSquare(worldobjects)
+        local found, why = nil, nil
+        if square then found, why = CSB.Capture.findStructure(square) end
+        if found then
+            addStudyOption(context, player, "IGUI_CSB_StudyStructure", { structure = found }, square, found.id)
+        elseif why == "tooBig" then
+            addStudyOption(context, player, "IGUI_CSB_StudyStructure", nil, square, nil, "IGUI_CSB_TooBig")
         end
-        option.toolTip = tooltip
     end
 
     local known = CSB.Store.list(player)

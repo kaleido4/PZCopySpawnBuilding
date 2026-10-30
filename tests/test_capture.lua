@@ -139,4 +139,125 @@ test("study time comes from the ground floor area", function()
     eq(CSB.Capture.area(buildBarn()), 6)
 end)
 
+---------------------------------------------------------------------------
+-- Structures: a roof with no rooms under it
+---------------------------------------------------------------------------
+
+defineSprite("blends_natural_01_16", { "solidfloor" })
+defineSprite("blends_street_01_80", { "solidfloor" })
+defineSprite("post", { "WallSE" })
+
+--[[
+    A carport on a field: a 3 x 2 roof on level 1 over x 25-27, y 25-26, a
+    post under each corner, and a concrete pad under the roof (one square of
+    it is grass) that runs 2 squares out in front. A house stands at x 32-35,
+    y 25-28, its roof hanging one square over on every side.
+--]]
+local function buildCarport()
+    resetWorld()
+    for x = 20, 40 do
+        for y = 20, 40 do
+            put(x, y, 0, "blends_natural_01_16")
+        end
+    end
+    for x = 25, 27 do
+        for y = 25, 28 do
+            if not (x == 27 and y == 26) then
+                square(x, y, 0).objects = {}
+                put(x, y, 0, "blends_street_01_80")
+            end
+        end
+        for y = 25, 26 do
+            put(x, y, 1, "roof")
+        end
+    end
+    for _, p in ipairs({ { 25, 25 }, { 27, 25 }, { 25, 26 }, { 27, 26 } }) do
+        put(p[1], p[2], 0, "post")
+    end
+    put(24, 25, 0, "tree", { class = "IsoTree" })
+    put(26, 26, 0, "crate", { container = true })
+
+    newBuildingDef(3, { { x = 32, y = 25, w = 4, h = 4, z = 0, name = "kitchen" } })
+    for x = 31, 36 do
+        for y = 24, 29 do
+            put(x, y, 1, "roof")
+        end
+    end
+end
+
+test("a carport is found by its roof", function()
+    buildCarport()
+    local found = CSB.Capture.findStructure(square(26, 26, 0))
+    eq(found.id, "s_25_25")
+    eq(found.count, 6, "roof columns")
+    eq(found.topZ, 1)
+end)
+
+test("a roof next to the square clicked counts too", function()
+    buildCarport()
+    local found = CSB.Capture.findStructure(square(26, 27, 0))
+    eq(found.id, "s_25_25")
+end)
+
+test("no roof, no structure", function()
+    buildCarport()
+    local found, why = CSB.Capture.findStructure(square(38, 38, 0))
+    eq(found, nil) eq(why, "noRoof")
+end)
+
+test("a house's eave is not a structure", function()
+    buildCarport()
+    local found, why = CSB.Capture.findStructure(square(36, 26, 0))
+    eq(found, nil) eq(why, "partOfBuilding")
+end)
+
+test("a roof past the size limit is too big", function()
+    buildCarport()
+    local max = CSB.MAX_ROOF
+    CSB.MAX_ROOF = 4
+    local found, why = CSB.Capture.findStructure(square(26, 26, 0))
+    CSB.MAX_ROOF = max
+    eq(found, nil) eq(why, "tooBig")
+end)
+
+test("studying a carport copies its roof, posts and the pad under the roof", function()
+    buildCarport()
+    local bp = CSB.Capture.studyStructure(square(26, 26, 0))
+    eq(bp.id, "s_25_25")
+    eq(bp.name, "Shelter")
+    eq(bp.area, 6)
+    eq(countSprite(bp, "roof"), 6, "roof")
+    eq(countSprite(bp, "post"), 4, "posts")
+    eq(countSprite(bp, "blends_street_01_80"), 5, "pad under the roof, not the part in front")
+    eq(countSprite(bp, "blends_natural_01_16"), 0, "grass")
+    eq(countSprite(bp, "tree"), 0, "tree")
+    eq(countSprite(bp, "crate"), 0, "crate")
+    eq(bp.w, 3, "w") eq(bp.h, 2, "h") eq(bp.levels, 2, "levels")
+end)
+
+test("the study report lists what was kept and what was left behind", function()
+    buildCarport()
+    local bp = CSB.Capture.studyStructure(square(26, 26, 0))
+    local text = table.concat(CSB.Capture.reportLines("structure", bp), "\n")
+    truthy(string.find(text, "Kept 15 pieces of Shelter", 1, true), "kept line")
+    truthy(string.find(text, "wall  0,0,0  post", 1, true), "a post")
+    truthy(string.find(text, "26,26,0  crate  [not structure]", 1, true), "crate left behind")
+    truthy(string.find(text, "27,26,0  blends_natural_01_16  [floor]", 1, true), "grass left behind")
+end)
+
+test("a failed study's report says why", function()
+    buildCarport()
+    local bp, why = CSB.Capture.studyStructure(square(38, 38, 0))
+    local lines = CSB.Capture.reportLines("structure", bp, why)
+    eq(lines[2], "Nothing kept: noRoof")
+end)
+
+test("studying a carport leaves the house next to it alone", function()
+    buildCarport()
+    local bp = CSB.Capture.studyStructure(square(26, 26, 0))
+    for _, t in ipairs(bp.tiles) do
+        truthy(t.x <= 2, "nothing past the carport's east side")
+    end
+end)
+
 finish("CSB_Capture")

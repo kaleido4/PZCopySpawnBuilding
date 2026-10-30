@@ -82,48 +82,112 @@ end)
 -- A 3 x 2 building on squares x 10-12, y 20-21, ground level only.
 local function room(x, y, z) return z == 0 and x >= 10 and x <= 12 and y >= 20 and y <= 21 end
 local function covered(x, y) return room(x, y, 0) end
+local BUILDING = { room = room, covered = covered, groundZ = 0 }
+local NEIGHBOUR = { room = room, covered = covered, groundZ = 0, foreign = true }
+-- The same 3 x 2 area as a structure: a roof with no rooms under it.
+local STRUCTURE = { room = function() return false end, covered = covered, groundZ = 0, groundFloors = true }
+
+local function piece(kind, edges, name)
+    return { kind = kind, edges = edges or {}, name = name or "tile" }
+end
 local W = { W = true }
 local N = { N = true }
 local SE = { corner = true }
-local NONE = {}
 
 test("everything structural on a room square belongs", function()
-    truthy(CSB.belongs("floor", NONE, 10, 20, 0, room, covered))
-    truthy(CSB.belongs("wall", W, 10, 20, 0, room, covered))
+    truthy(CSB.belongs(piece("floor"), 10, 20, 0, BUILDING))
+    truthy(CSB.belongs(piece("wall", W), 10, 20, 0, BUILDING))
 end)
 
 test("the east and south walls belong through their edge", function()
-    truthy(CSB.belongs("wall", W, 13, 21, 0, room, covered), "east wall")
-    truthy(CSB.belongs("door", N, 11, 22, 0, room, covered), "south door")
-    truthy(CSB.belongs("wall", SE, 13, 22, 0, room, covered), "south-east corner post")
+    truthy(CSB.belongs(piece("wall", W), 13, 21, 0, BUILDING), "east wall")
+    truthy(CSB.belongs(piece("door", N), 11, 22, 0, BUILDING), "south door")
+    truthy(CSB.belongs(piece("wall", SE), 13, 22, 0, BUILDING), "south-east corner post")
 end)
 
 test("edge pieces facing away from the building do not belong", function()
-    falsy(CSB.belongs("wall", N, 13, 21, 0, room, covered), "fence along the east side")
-    falsy(CSB.belongs("wall", W, 9, 21, 0, room, covered), "fence west of the west wall")
-    falsy(CSB.belongs("wall", W, 15, 20, 0, room, covered), "fence further away")
+    falsy(CSB.belongs(piece("wall", N), 13, 21, 0, BUILDING), "fence along the east side")
+    falsy(CSB.belongs(piece("wall", W), 9, 21, 0, BUILDING), "fence west of the west wall")
+    falsy(CSB.belongs(piece("wall", W), 15, 20, 0, BUILDING), "fence further away")
 end)
 
 test("roofs belong within 2 squares of the building", function()
-    truthy(CSB.belongs("roof", NONE, 11, 21, 1, room, covered), "over the building")
-    truthy(CSB.belongs("roof", NONE, 8, 20, 1, room, covered), "eave 2 squares out")
-    falsy(CSB.belongs("roof", NONE, 7, 20, 1, room, covered), "3 squares out")
+    truthy(CSB.belongs(piece("roof"), 11, 21, 1, BUILDING), "over the building")
+    truthy(CSB.belongs(piece("roof"), 8, 20, 1, BUILDING), "eave 2 squares out")
+    falsy(CSB.belongs(piece("roof"), 7, 20, 1, BUILDING), "3 squares out")
 end)
 
 test("floors outside the rooms count only above the ground and over the building", function()
-    falsy(CSB.belongs("floor", NONE, 9, 21, 0, room, covered), "porch or sidewalk")
-    truthy(CSB.belongs("floor", NONE, 11, 21, 1, room, covered), "flat roof")
-    falsy(CSB.belongs("floor", NONE, 9, 21, 1, room, covered), "next to it, upstairs")
+    falsy(CSB.belongs(piece("floor"), 9, 21, 0, BUILDING), "porch or sidewalk")
+    truthy(CSB.belongs(piece("floor"), 11, 21, 1, BUILDING), "flat roof")
+    falsy(CSB.belongs(piece("floor"), 9, 21, 1, BUILDING), "next to it, upstairs")
 end)
 
 test("gable walls above the top room belong", function()
-    truthy(CSB.belongs("wall", W, 10, 21, 1, room, covered), "west gable on the building's own square")
-    truthy(CSB.belongs("wall", W, 13, 21, 1, room, covered), "east gable outside it")
+    truthy(CSB.belongs(piece("wall", W), 10, 21, 1, BUILDING), "west gable on the building's own square")
+    truthy(CSB.belongs(piece("wall", W), 13, 21, 1, BUILDING), "east gable outside it")
 end)
 
 test("another building's squares only count through their edge", function()
-    falsy(CSB.belongs("roof", NONE, 13, 20, 1, room, covered, true), "neighbour's roof")
-    truthy(CSB.belongs("wall", W, 13, 20, 0, room, covered, true), "shared wall")
+    falsy(CSB.belongs(piece("roof"), 13, 20, 1, NEIGHBOUR), "neighbour's roof")
+    truthy(CSB.belongs(piece("wall", W), 13, 20, 0, NEIGHBOUR), "shared wall")
+end)
+
+test("a structure keeps the floor under its roof, but not grass or dirt", function()
+    truthy(CSB.belongs(piece("floor", nil, "blends_street_01_80"), 11, 21, 0, STRUCTURE), "concrete pad")
+    falsy(CSB.belongs(piece("floor", nil, "blends_natural_01_16"), 11, 21, 0, STRUCTURE), "grass")
+    falsy(CSB.belongs(piece("floor", nil, "blends_street_01_80"), 9, 21, 0, STRUCTURE), "pad sticking out")
+end)
+
+test("a structure keeps its posts and roof", function()
+    truthy(CSB.belongs(piece("wall", SE), 12, 21, 0, STRUCTURE), "post under the roof")
+    truthy(CSB.belongs(piece("wall", SE), 13, 22, 0, STRUCTURE), "post at the outer corner")
+    truthy(CSB.belongs(piece("roof"), 11, 20, 1, STRUCTURE), "roof")
+end)
+
+---------------------------------------------------------------------------
+-- Following a roof
+---------------------------------------------------------------------------
+
+-- roofs[y] is a row of the map from x 0: R = roof, B = roof over a building
+local function roofMap(rows)
+    local function at(x, y) return rows[y + 1] and string.sub(rows[y + 1], x + 1, x + 1) or "." end
+    return function(x, y) return at(x, y) == "R" or at(x, y) == "B" end,
+        function(x, y) return at(x, y) == "B" end
+end
+
+test("a roof is followed to its edges, diagonals included", function()
+    local hasRoof, blocked = roofMap({
+        "RRR.....",
+        "RRR.....",
+        "...R..RR",
+    })
+    local columns, count = CSB.roofColumns(0, 0, hasRoof, blocked)
+    eq(count, 7, "3 x 2 roof plus the one touching its corner")
+    truthy(columns[CSB.key(3, 2)], "corner neighbour")
+    falsy(columns[CSB.key(6, 2)], "a separate roof")
+end)
+
+test("a roof that runs onto a building is part of it", function()
+    local hasRoof, blocked = roofMap({
+        "RRRBBB",
+        "RRRBBB",
+    })
+    local columns, why = CSB.roofColumns(0, 0, hasRoof, blocked)
+    eq(columns, nil) eq(why, "partOfBuilding")
+end)
+
+test("a roof bigger than the limit is too big", function()
+    local hasRoof = function(x, y) return x >= 0 and y >= 0 and x < 30 and y < 30 end
+    local columns, why = CSB.roofColumns(0, 0, hasRoof, function() return false end)
+    eq(columns, nil) eq(why, "tooBig")
+end)
+
+test("roof pieces are known by their roof group or eave flag", function()
+    truthy(CSB.isRoofPiece(newObject("roof_slope")), "slope")
+    truthy(CSB.isRoofPiece(newObject("roof_eave")), "eave")
+    truthy(CSB.isRoofPiece(newObject("roof_flat")), "flat roof")
+    falsy(CSB.isRoofPiece(newObject("wall_w")), "wall")
 end)
 
 ---------------------------------------------------------------------------
@@ -193,6 +257,18 @@ test("buildings, water, vehicles, fences and missing ground are in the way", fun
     eq(CSB.groundProblem(square(4, 1, 0)), "vehicle")
     put(5, 1, 0, "grass") put(5, 1, 0, "fence")
     eq(CSB.groundProblem(square(5, 1, 0)), "blocked")
+end)
+
+test("plants, trees and items on a square are clutter that building removes", function()
+    resetWorld()
+    put(1, 1, 0, "grass")
+    falsy(CSB.cluttered(square(1, 1, 0)), "bare grass")
+    put(2, 1, 0, "grass") put(2, 1, 0, "bush")
+    truthy(CSB.cluttered(square(2, 1, 0)), "bush")
+    put(3, 1, 0, "grass") put(3, 1, 0, "floor_wood", { class = "IsoTree" })
+    truthy(CSB.cluttered(square(3, 1, 0)), "tree")
+    put(4, 1, 0, "grass") put(4, 1, 0, "chair", { class = "IsoWorldInventoryObject" })
+    truthy(CSB.cluttered(square(4, 1, 0)), "item")
 end)
 
 test("above the ground, missing or empty squares are free", function()

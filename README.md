@@ -3,6 +3,7 @@
 Project Zomboid (Build 42) mod: study a building you find on the map, then build a copy of it somewhere else.
 
 - Right-click a building (or one of its walls) and choose **Study building**. Your character looks it over with the plans in hand; bigger buildings take longer.
+- Under a roof that is not part of a building (carport, porch roof, shelter), choose **Study structure** instead.
 - Right-click anywhere and choose **Build studied building**, then pick one. A see-through copy follows the cursor, green where it fits and red where it does not. Click to build it.
 - In debug mode, **Undo last spawned building** takes the last copy down again.
 
@@ -26,9 +27,31 @@ Which pieces belong to the building:
 
 Basements are left out: a copy is built on the ground, from level 0 up.
 
+### Structures
+
+Carports, porch roofs and shelters often have no rooms, so the map does not know them as buildings. **Study structure** finds them by their roof: it starts at a roof piece over the square clicked (or a square next to it) and follows the roof in all 8 directions to its edges. Those roof columns then play the part of the rooms, and the floor under the roof is copied too, unless it is grass or dirt. A concrete pad that runs out past the roof is copied only under the roof. The copy is called "Shelter".
+
+A roof that runs onto a building is part of that building, so a house's eaves or an attached porch are not structures. Roofs bigger than 400 columns are too big to study this way.
+
+### Study report
+
+Each study writes `Zomboid/Lua/CopySpawnBuilding_last_study.txt`: every piece kept, and everything left behind on the squares it covers with the tile's flags. If a copy is missing something (posts, trim), the report shows how that tile is flagged and why it was not taken.
+
 ## Building a copy
 
-A copy fits where every square under it has ground and is not part of a building, not water, not under a vehicle and has nothing on it but plants, trees or items. Squares above the ground must be empty. Plants and trees are cleared; floors replace the grass.
+A copy fits where every square under it has ground and is not part of a building, not water, not under a vehicle and has nothing on it but plants, trees or items. Squares above the ground must be empty.
+
+While placing, the copy's footprint is highlighted on the ground under the mouse, in the game's highlight colors (so they follow the colorblind option):
+
+| Color | Meaning |
+|---|---|
+| good (green) | the copy fits |
+| bad (red) | it does not; the square in the way is drawn stronger |
+| yellow | plants, trees or items there will be removed |
+
+The see-through building stands on the footprint; its upper levels and roof are drawn fainter so the footprint shows through.
+
+When the copy is built, plants, trees and items lying on its squares are removed (items are deleted, not moved), and floors replace the grass. Undo does not bring them back.
 
 Pieces are made the way the map loader and the moveables code make them: doors as `IsoDoor`, windows as `IsoWindow`, window frames as `IsoWindowFrame`, everything else as a plain `IsoObject`. Map walls are plain objects, not the `IsoThumpable` walls players build, so zombies cannot break a copy's walls, the same as the original.
 

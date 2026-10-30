@@ -121,6 +121,12 @@ function newObject(spriteName, opts)
         table.insert(self.attached, { getParentSprite = function() return sprite end })
     end
     function obj:setIsLocked(locked) self.locked = locked end
+    -- an item lying on the ground points to its inventory item and back
+    if obj.class == "IsoWorldInventoryObject" then
+        obj.item = { worldItem = obj }
+        function obj.item:setWorldItem(w) self.worldItem = w end
+    end
+    function obj:getItem() return self.item end
     return obj
 end
 
@@ -177,6 +183,16 @@ function newSquare(x, y, z)
         end
         return -1
     end
+    -- items on the ground are in the object list too, like in the game
+    function sq:getWorldObjects()
+        local items = {}
+        for _, o in ipairs(self.objects) do
+            if o.class == "IsoWorldInventoryObject" then table.insert(items, o) end
+        end
+        return javaList(items)
+    end
+    function sq:removeWorldObject(obj) self:RemoveTileObject(obj) end
+    function sq:transmitRemoveItemFromSquare() end
     function sq:getBuilding() return self.building end
     function sq:isInARoom() return self.room == true end
     function sq:isWaterSquare() return self.water == true end

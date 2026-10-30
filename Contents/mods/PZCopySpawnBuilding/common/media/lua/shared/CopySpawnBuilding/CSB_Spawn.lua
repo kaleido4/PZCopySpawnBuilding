@@ -9,6 +9,9 @@
     not the IsoThumpables players build, so zombies cannot break a copy's
     walls, the same as the building it was copied from.
 
+    Before that, plants, trees and items lying on the copy's squares are
+    removed, so nothing ends up inside a wall.
+
     Single player for now: objects are added straight to the squares.
 --]]
 
@@ -18,7 +21,8 @@ CSB.Spawn = {}
 
 local footprints = {}
 
-local function footprint(bp)
+-- The blueprint's footprint (CSB.footprint), worked out once.
+function CSB.Spawn.footprint(bp)
     local fp = footprints[bp.id]
     if not fp or fp.tiles ~= bp.tiles then
         fp = CSB.footprint(bp)
@@ -28,22 +32,49 @@ local function footprint(bp)
     return fp
 end
 
+local footprint = CSB.Spawn.footprint
+
+--[[
+    Looks over the squares a copy would use with its box starting at
+    (ox, oy, oz). Returns:
+        problem      why it cannot be built, or nil when it can
+        px, py, pz   the square in the way
+        cluttered[i] ground column i (footprint order) has plants, trees or
+                     items on it, which building removes
+    With firstProblem set, stops at the first problem and skips clutter.
+--]]
+function CSB.Spawn.survey(bp, ox, oy, oz, firstProblem)
+    local cell = getCell()
+    local fp = footprint(bp)
+    local result = { cluttered = {} }
+    for i, c in ipairs(fp.columns) do
+        local x, y = ox + c.x, oy + c.y
+        local sq = cell:getGridSquare(x, y, oz)
+        local problem = CSB.groundProblem(sq)
+        if problem and not result.problem then
+            result.problem, result.px, result.py, result.pz = problem, x, y, oz
+            if firstProblem then return result end
+        end
+        if sq and not firstProblem then result.cluttered[i] = CSB.cluttered(sq) end
+    end
+    if not result.problem then
+        for _, s in ipairs(fp.upper) do
+            local x, y, z = ox + s.x, oy + s.y, oz + s.z
+            local problem = CSB.upperProblem(cell:getGridSquare(x, y, z))
+            if problem then
+                result.problem, result.px, result.py, result.pz = problem, x, y, z
+                break
+            end
+        end
+    end
+    return result
+end
+
 -- Why the copy cannot be built with its box starting at (ox, oy, oz), or nil.
 -- Also returns the square that is in the way.
 function CSB.Spawn.problem(bp, ox, oy, oz)
-    local cell = getCell()
-    local fp = footprint(bp)
-    for _, c in ipairs(fp.columns) do
-        local x, y = ox + c.x, oy + c.y
-        local problem = CSB.groundProblem(cell:getGridSquare(x, y, oz))
-        if problem then return problem, x, y, oz end
-    end
-    for _, s in ipairs(fp.upper) do
-        local x, y, z = ox + s.x, oy + s.y, oz + s.z
-        local problem = CSB.upperProblem(cell:getGridSquare(x, y, z))
-        if problem then return problem, x, y, z end
-    end
-    return nil
+    local s = CSB.Spawn.survey(bp, ox, oy, oz, true)
+    return s.problem, s.px, s.py, s.pz
 end
 
 local function attach(obj, names)
@@ -80,6 +111,19 @@ local function clearPlants(sq)
     end
 end
 
+-- Removes the items lying on the square, the way the game's debug item
+-- remover does (ISRemoveItemTool).
+local function clearItems(sq)
+    local items = sq:getWorldObjects()
+    for i = items:size() - 1, 0, -1 do
+        local worldItem = items:get(i)
+        local item = worldItem:getItem()
+        sq:transmitRemoveItemFromSquare(worldItem)
+        sq:removeWorldObject(worldItem)
+        if item then item:setWorldItem(nil) end
+    end
+end
+
 --[[
     Builds the copy with its box starting at (ox, oy, oz). Returns a record of
     what was done, for CSB.Spawn.undo:
@@ -91,9 +135,17 @@ function CSB.Spawn.place(bp, ox, oy, oz)
     local record = { id = bp.id, placed = {}, ground = {} }
     local touched = {}
 
-    for _, c in ipairs(footprint(bp).columns) do
+    local fp = footprint(bp)
+    for _, c in ipairs(fp.columns) do
         local sq = cell:getGridSquare(ox + c.x, oy + c.y, oz)
-        if sq then clearPlants(sq) end
+        if sq then
+            clearPlants(sq)
+            clearItems(sq)
+        end
+    end
+    for _, s in ipairs(fp.upper) do
+        local sq = cell:getGridSquare(ox + s.x, oy + s.y, oz + s.z)
+        if sq then clearItems(sq) end
     end
 
     -- floors first, so walls and roofs go on top of them
@@ -132,7 +184,7 @@ function CSB.Spawn.place(bp, ox, oy, oz)
 end
 
 -- Takes a copy down again: removes its pieces and puts back the ground
--- floors it replaced. Plants and trees it cleared do not come back.
+-- floors it replaced. Plants, trees and items it cleared do not come back.
 function CSB.Spawn.undo(record)
     local cell = getCell()
     local touched = {}

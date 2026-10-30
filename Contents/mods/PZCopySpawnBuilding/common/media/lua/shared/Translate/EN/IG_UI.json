@@ -1,8 +1,11 @@
 {
     "IGUI_CSB_StudyBuilding": "Study building",
-    "IGUI_CSB_StudyTooltip": "Look the building over and learn it, so you can build a copy of it somewhere else.",
-    "IGUI_CSB_AlreadyKnown": "You already know this building.",
+    "IGUI_CSB_StudyBuildingTooltip": "Look the building over and learn it, so you can build a copy of it somewhere else.",
+    "IGUI_CSB_StudyStructure": "Study structure",
+    "IGUI_CSB_StudyStructureTooltip": "Look this roofed structure over and learn it: the roof, its posts and the floor under it.",
+    "IGUI_CSB_AlreadyKnown": "You already know this one.",
     "IGUI_CSB_NotLoaded": "Part of the building is too far away. Get closer and try again.",
+    "IGUI_CSB_TooBig": "This roof is too big to study as a structure.",
     "IGUI_CSB_StudyFailed": "There is nothing here to study.",
     "IGUI_CSB_Learned": "Learned: %1",
     "IGUI_CSB_BuildMenu": "Build studied building",

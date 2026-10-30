@@ -24,9 +24,17 @@
     Over another building (a square of it, or the roof above it), pieces only
     count through their edge, so a neighbour's roof is not copied.
 
+    Structures: carports, porch roofs and shelters often have no rooms at all,
+    so the map does not know them as buildings. They are found by their roof
+    instead: the roof columns joined to the one over the click (see
+    CSB.roofColumns) play the part of the rooms seen from above, and the floor
+    under the roof is copied too, unless it is grass or dirt. A roof that runs
+    onto a building is part of that building, not a structure.
+
     Blueprint layout (kept in global mod data, see CSB_Store.lua):
-        id        "x_y" of the building's north-west corner where it was studied
-        name      shown in menus ("Barn", "House")
+        id        "x_y" of the building's north-west corner where it was studied,
+                  "s_x_y" of the roof's for a structure
+        name      shown in menus ("Barn", "House", "Shelter")
         w, h      size of the box the tiles fit in
         levels    levels the tiles use, roof included
         area      floor squares of the ground level rooms
@@ -38,9 +46,18 @@ CSB = CSB or {}
 
 CSB.MARGIN = 2          -- squares searched around the building (roofs hang over)
 CSB.ROOF_LEVELS = 3     -- levels searched above the top room for the roof
+CSB.MAX_ROOF = 400      -- most roof columns a structure can have
+CSB.STRUCTURE_NAME = "Shelter"
 
 -- Sprites never copied: blood, plants and grass.
 CSB.SKIP_PREFIXES = { "overlay_blood", "e_", "f_", "d_", "vegetation_", "blends_grassoverlays", "jumbo_" }
+
+-- Ground floors that are just the land: grass and dirt.
+CSB.NATURAL_FLOOR_PREFIX = "blends_natural"
+
+function CSB.key(x, y)
+    return x * 100000 + y
+end
 
 -- Rooms that make a building a house, whatever its biggest room is.
 CSB.HOUSE_ROOMS = { kitchen = true, bedroom = true, livingroom = true, bathroom = true }
@@ -87,6 +104,18 @@ function CSB.classify(obj)
     return nil
 end
 
+-- Whether the object is a piece of roof (a flat roof you can walk on too).
+function CSB.isRoofPiece(obj)
+    local sprite = obj:getSprite()
+    local props = sprite and sprite:getProperties()
+    return props ~= nil and (props:has("RoofGroup") or props:has(IsoFlagType.isEave))
+end
+
+function CSB.naturalFloor(name)
+    local prefix = CSB.NATURAL_FLOOR_PREFIX
+    return name ~= nil and string.sub(name, 1, #prefix) == prefix
+end
+
 -- Which square edges the piece sits on.
 function CSB.edges(props)
     local F = IsoFlagType
@@ -107,15 +136,26 @@ function CSB.near(x, y, d, covered)
     return false
 end
 
--- Whether a piece found on square (x, y, z) belongs to the building.
---   room(x, y, z)   the square is one of the building's rooms
---   covered(x, y)   some level of the building has a room there
---   foreign         the square is part of another building
-function CSB.belongs(kind, edges, x, y, z, room, covered, foreign)
-    if room(x, y, z) then return true end
-    if not foreign then
+--[[
+    Whether a piece found on square (x, y, z) belongs to what is studied.
+      piece   { kind, edges = CSB.edges(...), name = sprite name }
+      ctx     room(x, y, z)   the square is one of the building's rooms
+              covered(x, y)   the building is over that column: a room on some
+                              level, or the roof of a structure
+              foreign         the square is part of another building
+              groundZ         the level the building stands on
+              groundFloors    floors on the ground count where covered, except
+                              grass and dirt (a structure's floor)
+--]]
+function CSB.belongs(piece, x, y, z, ctx)
+    local kind, edges, covered = piece.kind, piece.edges, ctx.covered
+    if ctx.room(x, y, z) then return true end
+    if not ctx.foreign then
         if kind == "roof" then return CSB.near(x, y, CSB.MARGIN, covered) end
-        if kind == "floor" then return z > 0 and covered(x, y) end
+        if kind == "floor" then
+            if z > ctx.groundZ then return covered(x, y) end
+            return ctx.groundFloors == true and covered(x, y) and not CSB.naturalFloor(piece.name)
+        end
         if covered(x, y) then return true end
         if kind == "stairs" then return CSB.near(x, y, 1, covered) end
     end
@@ -123,6 +163,38 @@ function CSB.belongs(kind, edges, x, y, z, room, covered, foreign)
     if edges.N and covered(x, y - 1) then return true end
     if edges.corner and covered(x - 1, y - 1) then return true end
     return false
+end
+
+--[[
+    The columns of a roof joined to column (x, y), in 8 directions.
+      hasRoof(x, y)   a roof piece is over the column
+      blocked(x, y)   the column is part of a building
+    Returns { [CSB.key(x, y)] = { x, y } } and how many, or nil and why:
+    "partOfBuilding" when the roof runs onto a building, "tooBig" when it has
+    more than CSB.MAX_ROOF columns.
+--]]
+function CSB.roofColumns(x, y, hasRoof, blocked)
+    local start = { x = x, y = y }
+    local columns, count = { [CSB.key(x, y)] = start }, 1
+    local queue, head = { start }, 1
+    while head <= #queue do
+        local c = queue[head]
+        head = head + 1
+        if blocked(c.x, c.y) then return nil, "partOfBuilding" end
+        for dx = -1, 1 do
+            for dy = -1, 1 do
+                local nx, ny = c.x + dx, c.y + dy
+                local k = CSB.key(nx, ny)
+                if not columns[k] and hasRoof(nx, ny) then
+                    count = count + 1
+                    if count > CSB.MAX_ROOF then return nil, "tooBig" end
+                    columns[k] = { x = nx, y = ny }
+                    table.insert(queue, columns[k])
+                end
+            end
+        end
+    end
+    return columns, count
 end
 
 -- Moves the tiles so the box they fit in starts at 0, 0 and the ground is
@@ -199,10 +271,22 @@ function CSB.clearable(obj)
     return props ~= nil and props:has(IsoFlagType.vegitation)
 end
 
--- Whether the object is in the way of a copy (items on the ground just stay).
+-- Whether the object is in the way of a copy. Items on the ground are not:
+-- they are removed when the copy is built.
 function CSB.blocks(obj)
     if instanceof(obj, "IsoWorldInventoryObject") then return false end
     return not CSB.clearable(obj)
+end
+
+-- Whether building a copy here removes something: plants, trees or items.
+function CSB.cluttered(sq)
+    local floor = sq:getFloor()
+    local objects = sq:getObjects()
+    for i = 0, objects:size() - 1 do
+        local obj = objects:get(i)
+        if obj ~= floor and (CSB.clearable(obj) or instanceof(obj, "IsoWorldInventoryObject")) then return true end
+    end
+    return false
 end
 
 -- Why a copy cannot stand on this ground square, or nil when it can.
