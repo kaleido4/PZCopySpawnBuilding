@@ -9,8 +9,9 @@
     not the IsoThumpables players build, so zombies cannot break a copy's
     walls, the same as the building it was copied from.
 
-    Before that, plants, trees and items lying on the copy's squares are
-    removed, so nothing ends up inside a wall.
+    Before that, everything on the copy's squares is cleared (see
+    CSB.groundProblem for what cannot be): on the ground all but the floor,
+    above it everything, so nothing ends up inside a wall.
 
     Single player for now: objects are added straight to the squares.
 --]]
@@ -39,8 +40,8 @@ local footprint = CSB.Spawn.footprint
     (ox, oy, oz). Returns:
         problem      why it cannot be built, or nil when it can
         px, py, pz   the square in the way
-        cluttered[i] ground column i (footprint order) has plants, trees or
-                     items on it, which building removes
+        cluttered[i] ground column i (footprint order) has something on it
+                     besides its floor, which building clears
     With firstProblem set, stops at the first problem and skips clutter.
 --]]
 function CSB.Spawn.survey(bp, ox, oy, oz, firstProblem)
@@ -101,16 +102,6 @@ local function newPiece(cell, sq, t)
     return IsoObject.new(cell, sq, t.s)
 end
 
-local function clearPlants(sq)
-    local objects = sq:getObjects()
-    for i = objects:size() - 1, 0, -1 do
-        local obj = objects:get(i)
-        if obj ~= sq:getFloor() and CSB.clearable(obj) then
-            sq:RemoveTileObject(obj)
-        end
-    end
-end
-
 -- Removes the items lying on the square, the way the game's debug item
 -- remover does (ISRemoveItemTool).
 local function clearItems(sq)
@@ -121,6 +112,18 @@ local function clearItems(sq)
         sq:transmitRemoveItemFromSquare(worldItem)
         sq:removeWorldObject(worldItem)
         if item then item:setWorldItem(nil) end
+    end
+end
+
+-- Clears the square for the copy: its items, then every object but the
+-- floor (keepFloor) or every object.
+local function clearSquare(sq, keepFloor)
+    clearItems(sq)
+    local floor = keepFloor and sq:getFloor() or nil
+    local objects = sq:getObjects()
+    for i = objects:size() - 1, 0, -1 do
+        local obj = objects:get(i)
+        if obj ~= floor then sq:RemoveTileObject(obj) end
     end
 end
 
@@ -138,14 +141,11 @@ function CSB.Spawn.place(bp, ox, oy, oz)
     local fp = footprint(bp)
     for _, c in ipairs(fp.columns) do
         local sq = cell:getGridSquare(ox + c.x, oy + c.y, oz)
-        if sq then
-            clearPlants(sq)
-            clearItems(sq)
-        end
+        if sq then clearSquare(sq, true) end
     end
     for _, s in ipairs(fp.upper) do
         local sq = cell:getGridSquare(ox + s.x, oy + s.y, oz + s.z)
-        if sq then clearItems(sq) end
+        if sq then clearSquare(sq, false) end
     end
 
     -- floors first, so walls and roofs go on top of them
@@ -180,11 +180,34 @@ function CSB.Spawn.place(bp, ox, oy, oz)
         sq:RecalcProperties()
         sq:RecalcAllWithNeighbours(true)
     end
+    CSB.Spawn.updateRoofs(bp, ox, oy, oz)
     return record
 end
 
+--[[
+    Tells the game about the copy's roof, like its own building code does
+    (buildRecipeCode.lua, B42.22). A square counts as roofed (haveRoof) when
+    a floor or a rain-blocking tile is above it, but the game only checks
+    that when a floor is added or something removed, not for the roof pieces
+    added here. Roofed squares are not outside (RecalcProperties), animals
+    rest there in the rain, pigs, sheep and turkeys are not stressed by rain
+    there, and in an animal zone they walk to its roofed squares when it
+    rains (DesignationZoneAnimal roof areas).
+--]]
+function CSB.Spawn.updateRoofs(bp, ox, oy, oz)
+    local cell = getCell()
+    for _, c in ipairs(footprint(bp).columns) do
+        cell:checkHaveRoof(ox + c.x, oy + c.y)
+    end
+    for _, t in ipairs(bp.tiles) do
+        if t.z > 0 and (t.k == "roof" or t.k == "floor") then
+            DesignationZoneAnimal.addNewRoof(ox + t.x, oy + t.y, oz + t.z)
+        end
+    end
+end
+
 -- Takes a copy down again: removes its pieces and puts back the ground
--- floors it replaced. Plants, trees and items it cleared do not come back.
+-- floors it replaced. What was cleared to build it does not come back.
 function CSB.Spawn.undo(record)
     local cell = getCell()
     local touched = {}
@@ -205,8 +228,14 @@ function CSB.Spawn.undo(record)
             touched[sq] = true
         end
     end
+    local columns = {}
     for sq in pairs(touched) do
         sq:RecalcProperties()
         sq:RecalcAllWithNeighbours(true)
+        columns[sq:getX() .. "," .. sq:getY()] = sq
+    end
+    -- the squares under it are not roofed anymore
+    for _, sq in pairs(columns) do
+        cell:checkHaveRoof(sq:getX(), sq:getY())
     end
 end

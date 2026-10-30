@@ -148,7 +148,11 @@ IsoWindowFrame = { new = function(cell, sq, sprite, north) return made("IsoWindo
 local world
 
 function resetWorld()
-    world = { squares = {}, defs = {} }
+    world = { squares = {}, defs = {}, newRoofs = {} }
+end
+
+function newRoofs()
+    return table.concat(world.newRoofs, " ")
 end
 
 local function squareKey(x, y, z) return x .. "," .. y .. "," .. z end
@@ -228,6 +232,26 @@ local cell = {}
 function cell:getGridSquare(x, y, z) return world.squares[squareKey(x, y, z)] end
 function cell:createNewGridSquare(x, y, z) return newSquare(x, y, z) end
 function getCell() return cell end
+
+-- Like IsoCell.checkHaveRoof: from the top level down, a square is roofed
+-- when a square above it has a floor or a rain-blocking tile.
+function cell:checkHaveRoof(x, y)
+    local roofAbove = false
+    for z = 31, 0, -1 do
+        local sq = world.squares[squareKey(x, y, z)]
+        if sq then
+            sq.haveRoof = roofAbove
+            for _, o in ipairs(sq.objects) do
+                if o.sprite.props:has("solidfloor") or o.sprite.props:has("BlockRain") then roofAbove = true end
+            end
+        end
+    end
+end
+
+-- Animal zones are told about new roofs (the calls are recorded).
+DesignationZoneAnimal = {
+    addNewRoof = function(x, y, z) table.insert(world.newRoofs, x .. "," .. y .. "," .. z) end,
+}
 
 --[[
     newBuildingDef(id, { { x, y, w, h, z, name, outside = true }, ... })

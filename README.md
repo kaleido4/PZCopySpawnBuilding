@@ -48,7 +48,12 @@ Each study writes `Zomboid/Lua/CopySpawnBuilding_last_study.txt`: every piece ke
 
 ## Building a copy
 
-A copy fits where every square under it has ground and is not part of a building, not water, not under a vehicle and has nothing on it but plants, trees or items. Squares above the ground must be empty.
+Whatever stands on the squares a copy uses is cleared when it is built, so it goes anywhere except where something cannot be cleared:
+
+- a map building: a room, or an emptyoutside room such as a porch or a carport (on the ground or above it);
+- water;
+- a vehicle;
+- no ground (not loaded yet, or the edge of the map).
 
 While placing, the copy's footprint is highlighted on the ground under the mouse, in the game's highlight colors (so they follow the colorblind option):
 
@@ -56,11 +61,21 @@ While placing, the copy's footprint is highlighted on the ground under the mouse
 |---|---|
 | good (green) | the copy fits |
 | bad (red) | it does not; the square in the way is drawn stronger |
-| yellow | plants, trees or items there will be removed |
+| yellow | something there will be cleared (plants, trees, fences, furniture, containers, items) |
 
 The see-through building stands on the footprint; its upper levels and roof are drawn fainter so the footprint shows through.
 
-When the copy is built, plants, trees and items lying on its squares are removed (items are deleted, not moved), and floors replace the grass. Undo does not bring them back.
+When the copy is built, everything on the ground squares it uses is removed except the floor: plants, trees, fences, furniture, walls players built, containers with what is in them, and items lying there (deleted, not moved). On the squares above the ground it uses, everything is removed. Then floors replace the grass. Undo does not bring any of it back.
+
+### Roofs, rain and animals
+
+A square counts as roofed (`IsoGridSquare.haveRoof`) when a floor or a rain-blocking tile (roof tiles have `BlockRain`) is somewhere above it, and a roofed square is not outside. The game only rechecks this when a floor is added or something is removed, so after building, the mod does what the game's own building code does (`buildRecipeCode.lua`): `IsoCell:checkHaveRoof` for every column of the copy, and `DesignationZoneAnimal.addNewRoof` for its roof pieces. Undo rechecks the columns too.
+
+Rooms do not matter for this: a copied carport or shelter is a roof over animals' heads. Under it (B42.22):
+
+- animals rest and sit in the rain (they do not on unroofed squares);
+- pigs, sheep and turkeys are not stressed by rain (chickens, cows and the rest never are);
+- in an animal zone, animals walk to the zone's roofed squares when it rains.
 
 Pieces are made the way the map loader and the moveables code make them: doors as `IsoDoor`, windows as `IsoWindow`, window frames as `IsoWindowFrame`, everything else as a plain `IsoObject`. Map walls are plain objects, not the `IsoThumpable` walls players build, so zombies cannot break a copy's walls, the same as the original.
 

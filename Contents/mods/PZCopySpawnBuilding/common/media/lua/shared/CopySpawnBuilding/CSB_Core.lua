@@ -279,28 +279,29 @@ function CSB.footprint(bp)
     return { columns = columns, upper = upper }
 end
 
--- Plants and trees are cleared to make room for a copy.
-function CSB.clearable(obj)
-    if instanceof(obj, "IsoTree") then return true end
-    local sprite = obj:getSprite()
-    local props = sprite and sprite:getProperties()
-    return props ~= nil and props:has(IsoFlagType.vegitation)
+--[[
+    Where a copy can go. Whatever stands on the squares it uses is cleared
+    when it is built: plants, trees, fences, furniture, containers (with what
+    is in them), walls players built, and items lying there; only the ground
+    floor stays, under the copy's own floor. What cannot be cleared stops it:
+    a map building (a room, or an emptyoutside room such as a porch or a
+    carport), water, a vehicle, or no ground (not loaded, edge of the map).
+--]]
+
+-- Whether the square is part of a map building. getBuilding() only sees real
+-- rooms, so emptyoutside rooms are looked up in the map data.
+local function partOfBuilding(sq)
+    if sq:getBuilding() or sq:isInARoom() then return true end
+    return getWorld():getMetaGrid():getEmptyOutsideAt(sq:getX(), sq:getY(), sq:getZ()) ~= nil
 end
 
--- Whether the object is in the way of a copy. Items on the ground are not:
--- they are removed when the copy is built.
-function CSB.blocks(obj)
-    if instanceof(obj, "IsoWorldInventoryObject") then return false end
-    return not CSB.clearable(obj)
-end
-
--- Whether building a copy here removes something: plants, trees or items.
+-- Whether building a copy here clears something off the square: anything
+-- but its floor.
 function CSB.cluttered(sq)
     local floor = sq:getFloor()
     local objects = sq:getObjects()
     for i = 0, objects:size() - 1 do
-        local obj = objects:get(i)
-        if obj ~= floor and (CSB.clearable(obj) or instanceof(obj, "IsoWorldInventoryObject")) then return true end
+        if objects:get(i) ~= floor then return true end
     end
     return false
 end
@@ -308,27 +309,16 @@ end
 -- Why a copy cannot stand on this ground square, or nil when it can.
 function CSB.groundProblem(sq)
     if not sq then return "unloaded" end
-    if sq:getBuilding() or sq:isInARoom() then return "building" end
+    if partOfBuilding(sq) then return "building" end
     if sq:isWaterSquare() then return "water" end
-    local floor = sq:getFloor()
-    if not floor then return "noGround" end
+    if not sq:getFloor() then return "noGround" end
     if sq:isVehicleIntersecting() then return "vehicle" end
-    local objects = sq:getObjects()
-    for i = 0, objects:size() - 1 do
-        local obj = objects:get(i)
-        if obj ~= floor and CSB.blocks(obj) then return "blocked" end
-    end
     return nil
 end
 
 -- Why a copy cannot use this square above the ground, or nil when it can.
 -- A square that does not exist yet is free.
 function CSB.upperProblem(sq)
-    if not sq then return nil end
-    if sq:getBuilding() then return "building" end
-    local objects = sq:getObjects()
-    for i = 0, objects:size() - 1 do
-        if CSB.blocks(objects:get(i)) then return "blocked" end
-    end
+    if sq and partOfBuilding(sq) then return "building" end
     return nil
 end

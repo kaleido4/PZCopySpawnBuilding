@@ -7,7 +7,8 @@
     colorblind option):
         good color   the copy fits
         bad color    it does not; the square in the way is drawn stronger
-        yellow       plants, trees or items there will be removed
+        yellow       something there (plants, fences, furniture, items...)
+                     will be cleared
 
     It is a build cursor like the game's own (ISBuildingObject, driven by
     DoTileBuilding each frame), so it lives in server/ next to it: client
