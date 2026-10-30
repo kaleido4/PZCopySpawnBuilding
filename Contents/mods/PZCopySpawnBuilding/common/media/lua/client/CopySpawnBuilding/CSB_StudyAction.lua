@@ -39,7 +39,7 @@ end
 function CSB_StudyAction:perform()
     local bp, why
     if self.target.def then
-        bp, why = CSB.Capture.study(self.target.def)
+        bp, why = CSB.Capture.study(self.target.def, self.square:getZ())
         CSB.Capture.writeReport("building", bp, why)
     else
         bp, why = CSB.Capture.studyStructure(self.square)
@@ -59,7 +59,7 @@ function CSB_StudyAction:new(character, target, square)
     local o = ISBaseTimedAction.new(self, character)
     o.target = target
     o.square = square
-    local area = target.def and CSB.Capture.area(target.def) or target.structure.count
+    local area = target.def and CSB.Capture.area(target.def, square:getZ()) or target.structure.count
     o.maxTime = CSB.studyTime(area)
     if character:isTimedActionInstant() then
         o.maxTime = 1

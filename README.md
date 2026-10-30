@@ -28,6 +28,14 @@ Which pieces belong to the building:
 
 Basements are left out: a copy is built on the ground, from level 0 up.
 
+### Rooms and emptyoutside rooms
+
+A building has real rooms and "emptyoutside" rooms, the covered outdoor spots such as porches and carports (`BuildingDef:getRooms` and `getEmptyOutside`). A square's `getBuilding()` only sees real rooms, so the mod looks buildings up in the map data with both (`getRoomAt`, `getEmptyOutsideAt`). Which squares are rooms comes from the rooms' own rectangles: `BuildingDef:containsXYZ` only checks the building's outer box, which would take in the yard of an L-shaped house.
+
+Many carports are a building whose only room is an emptyoutside room on level 1, up at the roof, with nothing of it on the ground. Such a building is still copied from the ground up, and the floor under its roof is copied like a structure's.
+
+The click target is forgiving: **Study building** looks at the square clicked and the 8 around it on every level up to 3 above, and at what is drawn at the click from the levels above (roofs, upper floors), so clicking under, next to or on a building finds it.
+
 ### Structures
 
 Carports, porch roofs and shelters often have no rooms, so the map does not know them as buildings. **Study structure** finds them by their roof: it starts at a roof piece over the square clicked (or a square next to it) and follows the roof in all 8 directions to its edges. Those roof columns then play the part of the rooms, and the floor under the roof is copied too, unless it is grass or dirt. A concrete pad that runs out past the roof is copied only under the roof. The copy is called "Shelter".

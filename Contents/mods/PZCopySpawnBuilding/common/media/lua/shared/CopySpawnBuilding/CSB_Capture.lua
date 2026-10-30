@@ -6,9 +6,20 @@
       * a building: the map knows it by its rooms (a BuildingDef). The whole
         building has to be loaded (BuildingDef:isFullyStreamedIn), or part of
         it would be missing from the copy;
-      * a structure: a roof with no rooms under it (carport, porch roof,
-        shelter), found by following its roof from the square clicked
-        (CSB.Capture.findStructure).
+      * a structure: a roof with no building at all (CSB.Capture.findStructure).
+
+    A building has two kinds of rooms (B42.22): real rooms (getRooms) and
+    "emptyoutside" rooms (getEmptyOutside), the covered outdoor spots such as
+    porches and carports. A square's getBuilding() and the map's getRoomAt()
+    only see real rooms, so buildings are looked up in the map data with both
+    (defAt). A carport is often a building whose only room is an emptyoutside
+    room on level 1, up at its roof, with nothing of it on the ground: then
+    the copy still starts from the ground, and the floor under the roof is
+    copied like a structure's.
+
+    BuildingDef:containsXYZ only checks the building's outer box, so which
+    squares are rooms comes from the rooms' own rectangles (layout).
+
     Basements are left out for now: a copy is built on the ground, from the
     ground level up.
 
@@ -23,29 +34,84 @@ CSB.Capture = {}
 
 local key = CSB.key
 
--- Ground floor rooms of the building: { { name, area }, ... }
-local function rooms(def, groundZ)
-    local list = {}
-    local defRooms = def:getRooms()
-    for i = 0, defRooms:size() - 1 do
-        local room = defRooms:get(i)
-        if room:getZ() == groundZ then
-            table.insert(list, { name = room:getName(), area = room:getArea() })
+local function key3(x, y, z)
+    return key(x, y) * 100 + z
+end
+
+-- The building with a room (real or emptyoutside) on square (x, y, z), from
+-- the map data, loaded or not.
+local function defAt(x, y, z)
+    local meta = getWorld():getMetaGrid()
+    local room = meta:getRoomAt(x, y, z) or meta:getEmptyOutsideAt(x, y, z)
+    return room and room:getBuilding() or nil
+end
+CSB.Capture.defAt = defAt
+
+--[[
+    Where the building's rooms are, from their rectangles. clickZ is the level
+    the player studies it from: the copy's ground is the building's lowest
+    room, or that level if it is lower (a carport's room is up at its roof),
+    and never below 0 (no basements).
+        rooms     real rooms on the ground level: { { name, area } }
+        roomSet   [key3(x, y, z)] squares of a room, real or emptyoutside
+        covered   [key(x, y)] columns with a room on some level
+        count     how many covered columns
+        x1, y1, x2, y2, groundZ, topZ   bounds (inclusive) and levels
+        groundRooms  true when some room is on the ground level
+--]]
+function CSB.Capture.layout(def, clickZ)
+    local l = { rooms = {}, roomSet = {}, covered = {}, count = 0 }
+    local all = {}
+    for _, list in ipairs({ def:getRooms(), def:getEmptyOutside() }) do
+        for i = 0, list:size() - 1 do
+            table.insert(all, list:get(i))
         end
     end
-    return list
-end
-
-function CSB.Capture.groundZ(def)
-    return math.max(0, def:getMinLevel())
-end
-
-function CSB.Capture.area(def)
-    local total = 0
-    for _, room in ipairs(rooms(def, CSB.Capture.groundZ(def))) do
-        total = total + room.area
+    for _, room in ipairs(all) do
+        local z = room:getZ()
+        l.minZ = math.min(l.minZ or z, z)
+        l.topZ = math.max(l.topZ or z, z)
     end
-    return total
+    l.groundZ = math.max(0, math.min(l.minZ or 0, clickZ or 0))
+    l.topZ = l.topZ or l.groundZ
+    for _, room in ipairs(all) do
+        local z = room:getZ()
+        local rects = room:getRects()
+        for i = 0, rects:size() - 1 do
+            local r = rects:get(i)
+            for x = r:getX(), r:getX() + r:getW() - 1 do
+                for y = r:getY(), r:getY() + r:getH() - 1 do
+                    l.roomSet[key3(x, y, z)] = true
+                    if not l.covered[key(x, y)] then
+                        l.covered[key(x, y)] = true
+                        l.count = l.count + 1
+                    end
+                    l.x1, l.y1 = math.min(l.x1 or x, x), math.min(l.y1 or y, y)
+                    l.x2, l.y2 = math.max(l.x2 or x, x), math.max(l.y2 or y, y)
+                end
+            end
+        end
+        if z == l.groundZ then l.groundRooms = true end
+    end
+    local real = def:getRooms()
+    for i = 0, real:size() - 1 do
+        local room = real:get(i)
+        if room:getZ() == l.groundZ then
+            table.insert(l.rooms, { name = room:getName(), area = room:getArea() })
+        end
+    end
+    return l
+end
+
+-- The blueprint id a building gets, to tell whether it is known already.
+function CSB.Capture.buildingId(def, clickZ)
+    local l = CSB.Capture.layout(def, clickZ)
+    return (l.x1 or 0) .. "_" .. (l.y1 or 0)
+end
+
+-- How many columns the building covers, for the study time.
+function CSB.Capture.area(def, clickZ)
+    return CSB.Capture.layout(def, clickZ).count
 end
 
 local function attachedNames(obj)
@@ -61,14 +127,12 @@ local function attachedNames(obj)
     return names
 end
 
--- Whether another building than `ownId` stands on the column, on any level
--- from z1 to z2. Roof squares are not part of any building, so a neighbour's
--- roof is known by the building under it.
-local function otherBuildingAt(cell, x, y, z1, z2, ownId)
+-- Whether another building than `ownId` has a room on the column, on any
+-- level from z1 to z2. Roof squares are not part of any building, so a
+-- neighbour's roof is known by the building under it.
+local function otherBuildingAt(x, y, z1, z2, ownId)
     for z = z1, z2 do
-        local sq = cell:getGridSquare(x, y, z)
-        local building = sq and sq:getBuilding()
-        local def = building and building:getDef()
+        local def = defAt(x, y, z)
         if def and (ownId == nil or def:getID() ~= ownId) then return true end
     end
     return false
@@ -95,7 +159,7 @@ local function scan(x1, y1, x2, y2, groundZ, topZ, ctx, ownId)
                 if sq then
                     local k = key(x, y)
                     if foreignSet[k] == nil then
-                        foreignSet[k] = otherBuildingAt(cell, x, y, groundZ, topZ, ownId)
+                        foreignSet[k] = otherBuildingAt(x, y, groundZ, topZ, ownId)
                     end
                     ctx.foreign = foreignSet[k]
                     local objects = sq:getObjects()
@@ -130,70 +194,62 @@ local function blueprint(tiles, groundZ, id, name, area)
     return { id = id, name = name, w = w, h = h, levels = levels, area = area, tiles = tiles }
 end
 
--- Studies a building. Returns the blueprint, or nil and why not
--- ("notLoaded", "empty").
-function CSB.Capture.study(def)
+-- Studies a building from level clickZ (see layout). Returns the blueprint,
+-- or nil and why not ("notLoaded", "empty").
+function CSB.Capture.study(def, clickZ)
     CSB.Capture.lastSkipped = {}
     if not def:isFullyStreamedIn() then return nil, "notLoaded" end
-    local x1, y1, x2, y2 = def:getX(), def:getY(), def:getX2(), def:getY2()
-    local groundZ = CSB.Capture.groundZ(def)
-    local topZ = def:getMaxLevel()
-
-    -- columns the building covers on some level, seen from above
-    local coveredSet = {}
-    for x = x1, x2 do
-        for y = y1, y2 do
-            for z = groundZ, topZ do
-                if def:containsXYZ(x, y, z) then
-                    coveredSet[key(x, y)] = true
-                    break
-                end
-            end
-        end
-    end
+    local l = CSB.Capture.layout(def, clickZ)
+    if not l.x1 then return nil, "empty" end
     local ctx = {
-        room = function(x, y, z) return def:containsXYZ(x, y, z) end,
-        covered = function(x, y) return coveredSet[key(x, y)] == true end,
-        groundZ = groundZ,
+        room = function(x, y, z) return l.roomSet[key3(x, y, z)] == true end,
+        covered = function(x, y) return l.covered[key(x, y)] == true end,
+        groundZ = l.groundZ,
+        -- nothing of it on the ground (a carport's room is up at its roof):
+        -- the floor under it is copied like a structure's
+        groundFloors = not l.groundRooms,
     }
-    local tiles = scan(x1, y1, x2, y2, groundZ, topZ + CSB.ROOF_LEVELS, ctx, def:getID())
-    local groundRooms = rooms(def, groundZ)
-    local area = 0
-    for _, r in ipairs(groundRooms) do area = area + r.area end
-    return blueprint(tiles, groundZ, x1 .. "_" .. y1, CSB.buildingName(groundRooms), area)
+    local tiles = scan(l.x1, l.y1, l.x2, l.y2, l.groundZ, l.topZ + CSB.ROOF_LEVELS, ctx, def:getID())
+    local name = #l.rooms > 0 and CSB.buildingName(l.rooms) or CSB.STRUCTURE_NAME
+    return blueprint(tiles, l.groundZ, l.x1 .. "_" .. l.y1, name, l.count)
 end
 
 -- The square and the 8 around it, nearest first.
 local NEAR = { { 0, 0 }, { 0, -1 }, { -1, 0 }, { 1, 0 }, { 0, 1 }, { -1, -1 }, { 1, -1 }, { -1, 1 }, { 1, 1 } }
 
-local function defOf(sq)
-    local building = sq and sq:getBuilding()
-    return building and building:getDef() or nil
-end
-
 --[[
-    The building the player clicked on, from the square the click landed on:
-      * the square's own building;
-      * the building west, north or north-west of it, whose east or south
-        wall stands on the square;
-      * a building drawn at the click from a level above (CSB.screenStack):
-        an upper floor, or a roof over the building's column.
+    The building the player clicked on, from the square the click landed on.
+    The target is forgiving: it looks at
+      * the square and the 8 around it, on every level up to CSB.ROOF_LEVELS
+        above (a carport's room is up at its roof; a wall on the square's
+        east or south edge belongs to the building next to it);
+      * what is drawn at the click from the levels above (CSB.screenStack):
+        an upper floor or a roof, and the squares around it.
     Returns the BuildingDef, or nil.
 --]]
 function CSB.Capture.buildingAt(sq)
     local cell = getCell()
     local x, y, z = sq:getX(), sq:getY(), sq:getZ()
-    local def = defOf(sq)
-    if def then return def end
-    for _, d in ipairs({ { -1, 0 }, { 0, -1 }, { -1, -1 } }) do
-        def = defOf(cell:getGridSquare(x + d[1], y + d[2], z))
-        if def then return def end
+    local lastZ = math.min(31, z + CSB.ROOF_LEVELS)
+    local function columnDef(cx, cy)
+        for lz = z, lastZ do
+            local def = defAt(cx, cy, lz)
+            if def then return def end
+        end
+        return nil
     end
     for _, p in ipairs(CSB.screenStack(x, y, z, CSB.ROOF_LEVELS)) do
-        local above = p.up > 0 and cell:getGridSquare(p.x, p.y, p.z)
-        if above and above:getObjects():size() > 0 then
-            def = defOf(above) or defOf(cell:getGridSquare(p.x, p.y, z))
-            if def then return def end
+        for _, d in ipairs(NEAR) do
+            local cx, cy = p.x + d[1], p.y + d[2]
+            local drawn = p.up == 0
+            if not drawn then
+                local above = cell:getGridSquare(cx, cy, p.z)
+                drawn = above ~= nil and above:getObjects():size() > 0
+            end
+            if drawn then
+                local def = columnDef(cx, cy)
+                if def then return def end
+            end
         end
     end
     return nil
@@ -253,7 +309,7 @@ function CSB.Capture.findStructure(sq)
 
     local columns, count = CSB.roofColumns(sx, sy,
         function(x, y) return roofAt(x, y) ~= nil end,
-        function(x, y) return otherBuildingAt(cell, x, y, groundZ, lastZ, nil) end)
+        function(x, y) return otherBuildingAt(x, y, groundZ, lastZ, nil) end)
     if not columns then return nil, count end
 
     local x1, y1, x2, y2, topZ

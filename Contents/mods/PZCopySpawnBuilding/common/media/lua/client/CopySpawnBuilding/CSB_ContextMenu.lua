@@ -1,7 +1,7 @@
 --[[
     Copy Spawn Building - right-click menu:
-      * "Study building" on a building: its floor, its walls, or its upper
-        floors and roof as drawn on screen (CSB.Capture.buildingAt);
+      * "Study building" on or next to a building: its floor, its walls, or
+        its upper floors and roof as drawn on screen (CSB.Capture.buildingAt);
       * "Study structure" on or under a roof that is not part of a building
         (carport, porch roof, shelter);
       * "Build studied building" with the buildings the character knows, which
@@ -69,7 +69,7 @@ function CSB.Menu.fill(playerNum, context, worldobjects, test)
     if def then
         local problem = not def:isFullyStreamedIn() and "IGUI_CSB_NotLoaded" or nil
         addStudyOption(context, player, "IGUI_CSB_StudyBuilding", { def = def }, square,
-            def:getX() .. "_" .. def:getY(), problem)
+            CSB.Capture.buildingId(def, square:getZ()), problem)
     elseif square then
         local found, why = CSB.Capture.findStructure(square)
         if found then

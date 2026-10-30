@@ -148,7 +148,7 @@ IsoWindowFrame = { new = function(cell, sq, sprite, north) return made("IsoWindo
 local world
 
 function resetWorld()
-    world = { squares = {} }
+    world = { squares = {}, defs = {} }
 end
 
 local function squareKey(x, y, z) return x .. "," .. y .. "," .. z end
@@ -229,55 +229,69 @@ function cell:getGridSquare(x, y, z) return world.squares[squareKey(x, y, z)] en
 function cell:createNewGridSquare(x, y, z) return newSquare(x, y, z) end
 function getCell() return cell end
 
--- newBuildingDef(id, { { x, y, w, h, z, name }, ... })
+--[[
+    newBuildingDef(id, { { x, y, w, h, z, name, outside = true }, ... })
+    A room with outside = true is an "emptyoutside" room (porch, carport): it
+    is in getEmptyOutside, not getRooms, the map finds it with
+    getEmptyOutsideAt, not getRoomAt, and its squares have no building.
+--]]
 function newBuildingDef(id, rooms)
-    local def = { id = id, rooms = rooms, loaded = true }
-    local x1, y1, x2, y2, minZ, maxZ
+    local def = { id = id, loaded = true, roomMocks = {} }
+    local real, outside = {}, {}
     for _, r in ipairs(rooms) do
-        x1 = math.min(x1 or r.x, r.x)
-        y1 = math.min(y1 or r.y, r.y)
-        x2 = math.max(x2 or r.x + r.w, r.x + r.w)
-        y2 = math.max(y2 or r.y + r.h, r.y + r.h)
-        minZ = math.min(minZ or r.z, r.z)
-        maxZ = math.max(maxZ or r.z, r.z)
+        local rect = {
+            getX = function() return r.x end, getY = function() return r.y end,
+            getW = function() return r.w end, getH = function() return r.h end,
+        }
+        local room = {
+            getZ = function() return r.z end,
+            getName = function() return r.name end,
+            getArea = function() return r.w * r.h end,
+            getRects = function() return javaList({ rect }) end,
+            getBuilding = function() return def end,
+        }
+        table.insert(def.roomMocks, { r = r, room = room })
+        table.insert(r.outside and outside or real, room)
     end
-    function def:getX() return x1 end
-    function def:getY() return y1 end
-    function def:getX2() return x2 end
-    function def:getY2() return y2 end
-    function def:getMinLevel() return minZ end
-    function def:getMaxLevel() return maxZ end
+    function def:getRooms() return javaList(real) end
+    function def:getEmptyOutside() return javaList(outside) end
     function def:getID() return self.id end
     function def:isFullyStreamedIn() return self.loaded end
-    function def:containsXYZ(x, y, z)
-        for _, r in ipairs(self.rooms) do
-            if z == r.z and x >= r.x and x < r.x + r.w and y >= r.y and y < r.y + r.h then return true end
-        end
-        return false
-    end
-    function def:getRooms()
-        local list = {}
-        for _, r in ipairs(self.rooms) do
-            table.insert(list, {
-                getZ = function() return r.z end,
-                getName = function() return r.name end,
-                getArea = function() return r.w * r.h end,
-            })
-        end
-        return javaList(list)
-    end
-    -- the IsoBuilding the def's room squares point to
+    -- the IsoBuilding the def's real room squares point to
     def.building = { getDef = function() return def end }
     for _, r in ipairs(rooms) do
-        for x = r.x, r.x + r.w - 1 do
-            for y = r.y, r.y + r.h - 1 do
-                local sq = square(x, y, r.z)
-                sq.building = def.building
-                sq.room = true
+        if not r.outside then
+            for x = r.x, r.x + r.w - 1 do
+                for y = r.y, r.y + r.h - 1 do
+                    local sq = square(x, y, r.z)
+                    sq.building = def.building
+                    sq.room = true
+                end
             end
         end
     end
+    table.insert(world.defs, def)
     return def
 end
+
+local function roomAt(x, y, z, outside)
+    for _, def in ipairs(world.defs) do
+        for _, m in ipairs(def.roomMocks) do
+            local r = m.r
+            if (r.outside == true) == outside and z == r.z
+                and x >= r.x and x < r.x + r.w and y >= r.y and y < r.y + r.h then
+                return m.room
+            end
+        end
+    end
+    return nil
+end
+
+local metaGrid = {}
+function metaGrid:getRoomAt(x, y, z) return roomAt(x, y, z, false) end
+function metaGrid:getEmptyOutsideAt(x, y, z) return roomAt(x, y, z, true) end
+local gameWorld = {}
+function gameWorld:getMetaGrid() return metaGrid end
+function getWorld() return gameWorld end
 
 resetWorld()

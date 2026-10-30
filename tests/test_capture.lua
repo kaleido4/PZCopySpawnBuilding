@@ -268,6 +268,111 @@ test("studying a carport copies its roof, posts and the pad under the roof", fun
     eq(bp.w, 3, "w") eq(bp.h, 2, "h") eq(bp.levels, 2, "levels")
 end)
 
+---------------------------------------------------------------------------
+-- A carport stored as a building whose only room is an emptyoutside room on
+-- level 1, at its roof (the one on the map at 9101-9104, 9307-9310)
+---------------------------------------------------------------------------
+
+defineSprite("floor_porch", { "solidfloor" })
+
+local function buildRoofRoomCarport()
+    resetWorld()
+    for x = 38, 55 do
+        for y = 24, 40 do
+            put(x, y, 0, "blends_natural_01_16")
+        end
+    end
+    for x = 45, 48 do
+        for y = 30, 35 do
+            square(x, y, 0).objects = {}
+            put(x, y, 0, "blends_street_01_80")
+        end
+        for y = 30, 33 do
+            put(x, y, 1, "roof")
+        end
+    end
+    for _, p in ipairs({ { 45, 30 }, { 48, 30 }, { 45, 33 }, { 48, 33 } }) do
+        put(p[1], p[2], 0, "post")
+    end
+    return newBuildingDef(5, { { x = 45, y = 30, w = 4, h = 4, z = 1, name = "emptyoutside", outside = true } })
+end
+
+test("a carport whose room is up at its roof is found from the ground under it", function()
+    local def = buildRoofRoomCarport()
+    eq(CSB.Capture.buildingAt(square(46, 31, 0)), def, "under it")
+    eq(CSB.Capture.buildingAt(square(44, 31, 0)), def, "next to it")
+    -- the roof over 45,30 on level 1 is drawn over ground square 42,27
+    eq(CSB.Capture.buildingAt(square(42, 27, 0)), def, "on its roof as drawn")
+end)
+
+test("its roof belongs to that building, so it is not a structure", function()
+    buildRoofRoomCarport()
+    local found, why = CSB.Capture.findStructure(square(46, 31, 0))
+    eq(found, nil) eq(why, "partOfBuilding")
+end)
+
+test("studying it copies from the ground: roof, posts and the pad under the roof", function()
+    local def = buildRoofRoomCarport()
+    eq(CSB.Capture.layout(def, 0).groundZ, 0, "ground level")
+    local bp = CSB.Capture.study(def, 0)
+    eq(bp.id, "45_30")
+    eq(bp.name, "Shelter")
+    eq(bp.area, 16)
+    eq(countSprite(bp, "roof"), 16, "roof")
+    eq(countSprite(bp, "post"), 4, "posts")
+    eq(countSprite(bp, "blends_street_01_80"), 16, "pad under the roof, not the part in front")
+    eq(countSprite(bp, "blends_natural_01_16"), 0, "grass")
+    eq(bp.w, 4, "w") eq(bp.h, 4, "h") eq(bp.levels, 2, "levels")
+end)
+
+---------------------------------------------------------------------------
+-- An L-shaped house with a porch (an emptyoutside room on the ground)
+---------------------------------------------------------------------------
+
+--[[
+    Rooms on level 0: kitchen x 60-62, y 20-21, bedroom x 60, y 22-23; the
+    yard in the L's corner (x 61-62, y 22-23) is not part of it. A porch
+    (emptyoutside) runs along the east side at x 63, y 20-21.
+--]]
+local function buildLHouse()
+    resetWorld()
+    for x = 56, 68 do
+        for y = 16, 28 do
+            put(x, y, 0, "blends_natural_01_16")
+        end
+    end
+    local rooms = { { 60, 20 }, { 61, 20 }, { 62, 20 }, { 60, 21 }, { 61, 21 }, { 62, 21 }, { 60, 22 }, { 60, 23 } }
+    for _, p in ipairs(rooms) do
+        square(p[1], p[2], 0).objects = {}
+        put(p[1], p[2], 0, "floor_wood")
+    end
+    for _, p in ipairs({ { 63, 20 }, { 63, 21 } }) do
+        square(p[1], p[2], 0).objects = {}
+        put(p[1], p[2], 0, "floor_porch")
+    end
+    put(64, 21, 0, "post")
+    put(62, 23, 0, "fence_w")
+    return newBuildingDef(6, {
+        { x = 60, y = 20, w = 3, h = 2, z = 0, name = "kitchen" },
+        { x = 60, y = 22, w = 1, h = 2, z = 0, name = "bedroom" },
+        { x = 63, y = 20, w = 1, h = 2, z = 0, name = "emptyoutside", outside = true },
+    })
+end
+
+test("an L-shaped house leaves its yard out", function()
+    local bp = CSB.Capture.study(buildLHouse(), 0)
+    eq(bp.name, "House")
+    eq(countSprite(bp, "floor_wood"), 8, "room floors")
+    eq(countSprite(bp, "fence_w"), 0, "fence in the yard")
+    eq(countSprite(bp, "blends_natural_01_16"), 0, "grass in the yard")
+end)
+
+test("a porch is part of the house", function()
+    local bp = CSB.Capture.study(buildLHouse(), 0)
+    eq(countSprite(bp, "floor_porch"), 2, "porch floor")
+    eq(countSprite(bp, "post"), 1, "porch post")
+end)
+
 test("the study report lists what was kept and what was left behind", function()
     buildCarport()
     local bp = CSB.Capture.studyStructure(square(26, 26, 0))
