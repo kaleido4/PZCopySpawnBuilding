@@ -43,6 +43,7 @@ local FILES = {
     "shared/CopySpawnBuilding/CSB_Spawn.lua",
     "client/CopySpawnBuilding/CSB_StudyAction.lua",
     "client/CopySpawnBuilding/CSB_ContextMenu.lua",
+    "client/CopySpawnBuilding/CSB_Update.lua",
     "server/CopySpawnBuilding/CSB_Cursor.lua",
 }
 

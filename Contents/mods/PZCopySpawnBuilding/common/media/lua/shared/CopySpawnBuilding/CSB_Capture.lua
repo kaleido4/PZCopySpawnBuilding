@@ -58,6 +58,7 @@ CSB.Capture.defAt = defAt
         count     how many covered columns
         x1, y1, x2, y2, groundZ, topZ   bounds (inclusive) and levels
         groundRooms  true when some room is on the ground level
+        sample    { x, y, z } a square of one of its rooms
 --]]
 function CSB.Capture.layout(def, clickZ)
     local l = { rooms = {}, roomSet = {}, covered = {}, count = 0 }
@@ -79,6 +80,7 @@ function CSB.Capture.layout(def, clickZ)
         local rects = room:getRects()
         for i = 0, rects:size() - 1 do
             local r = rects:get(i)
+            l.sample = l.sample or { x = r:getX(), y = r:getY(), z = z }
             for x = r:getX(), r:getX() + r:getW() - 1 do
                 for y = r:getY(), r:getY() + r:getH() - 1 do
                     l.roomSet[key3(x, y, z)] = true
@@ -188,10 +190,13 @@ local function scan(x1, y1, x2, y2, groundZ, topZ, ctx, ownId)
 end
 
 -- The blueprint from scanned tiles, or nil and "empty".
-local function blueprint(tiles, groundZ, id, name, area)
+local function blueprint(tiles, groundZ, id, name, area, src)
     if #tiles == 0 then return nil, "empty" end
     local w, h, levels = CSB.normalize(tiles, groundZ)
-    return { id = id, name = name, w = w, h = h, levels = levels, area = area, tiles = tiles }
+    return {
+        id = id, v = CSB.CAPTURE_VERSION, src = src,
+        name = name, w = w, h = h, levels = levels, area = area, tiles = tiles,
+    }
 end
 
 -- Studies a building from level clickZ (see layout). Returns the blueprint,
@@ -211,7 +216,8 @@ function CSB.Capture.study(def, clickZ)
     }
     local tiles = scan(l.x1, l.y1, l.x2, l.y2, l.groundZ, l.topZ + CSB.ROOF_LEVELS, ctx, def:getID())
     local name = #l.rooms > 0 and CSB.buildingName(l.rooms) or CSB.STRUCTURE_NAME
-    return blueprint(tiles, l.groundZ, l.x1 .. "_" .. l.y1, name, l.count)
+    local src = { kind = "building", x = l.sample.x, y = l.sample.y, z = l.sample.z, clickZ = clickZ or 0 }
+    return blueprint(tiles, l.groundZ, l.x1 .. "_" .. l.y1, name, l.count, src)
 end
 
 -- The square and the 8 around it, nearest first.
@@ -388,5 +394,61 @@ function CSB.Capture.studyStructure(sq)
     }
     -- levels above the lowest roof piece: ridges and gable tops
     local tiles = scan(found.x1, found.y1, found.x2, found.y2, found.groundZ, found.topZ + 2, ctx, nil)
-    return blueprint(tiles, found.groundZ, found.id, CSB.STRUCTURE_NAME, found.count)
+    local src = { kind = "structure", x = sq:getX(), y = sq:getY(), z = sq:getZ() }
+    return blueprint(tiles, found.groundZ, found.id, CSB.STRUCTURE_NAME, found.count, src)
+end
+
+--[[
+    Where the original of a blueprint is, from its src, or for a blueprint
+    made before src was kept, from its id: "x_y" is the north-west corner of
+    the building's rooms, "s_x_y" a column of the structure's roof.
+--]]
+function CSB.Capture.source(bp)
+    if bp.src then return bp.src end
+    local sx, sy = string.match(bp.id or "", "^s_(%-?%d+)_(%-?%d+)$")
+    if sx then return { kind = "structure", x = tonumber(sx), y = tonumber(sy), z = 0 } end
+    local x, y = string.match(bp.id or "", "^(%-?%d+)_(%-?%d+)$")
+    if x then return { kind = "building", x = tonumber(x), y = tonumber(y), clickZ = 0 } end
+    return nil
+end
+
+-- The building at a source: the room square it names, or for an old
+-- blueprint (no z), a room on some level near its corner.
+local function sourceDef(src)
+    if src.z then return defAt(src.x, src.y, src.z) end
+    for z = 0, CSB.ROOF_LEVELS + 4 do
+        for dx = 0, 2 do
+            for dy = 0, 2 do
+                local def = defAt(src.x + dx, src.y + dy, z)
+                if def then return def end
+            end
+        end
+    end
+    return nil
+end
+
+--[[
+    Studies a blueprint's original again, to bring it up to the current
+    rules. Returns the new blueprint (same id), or nil and why not:
+      "away"   the original is not loaded (the player is not near it)
+      "gone"   it is not there anymore, or became something else
+      or why the study failed.
+--]]
+function CSB.Capture.restudy(bp)
+    local src = CSB.Capture.source(bp)
+    if not src then return nil, "gone" end
+    local new, why
+    if src.kind == "structure" then
+        local sq = getCell():getGridSquare(src.x, src.y, src.z)
+        if not sq then return nil, "away" end
+        new, why = CSB.Capture.studyStructure(sq)
+    else
+        local def = sourceDef(src)
+        if not def then return nil, "gone" end
+        if not def:isFullyStreamedIn() then return nil, "away" end
+        new, why = CSB.Capture.study(def, src.clickZ)
+    end
+    if not new then return nil, why end
+    if new.id ~= bp.id then return nil, "gone" end
+    return new
 end

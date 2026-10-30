@@ -36,6 +36,10 @@
     Blueprint layout (kept in global mod data, see CSB_Store.lua):
         id        "x_y" of the building's north-west corner where it was studied,
                   "s_x_y" of the roof's for a structure
+        v         CSB.CAPTURE_VERSION it was made with
+        src       where to find the original again: { kind = "building" or
+                  "structure", x, y, z, clickZ } (a room square of the
+                  building, or the square the structure was studied from)
         name      shown in menus ("Barn", "House", "Shelter")
         w, h      size of the box the tiles fit in
         levels    levels the tiles use, roof included
@@ -45,6 +49,13 @@
 --]]
 
 CSB = CSB or {}
+
+-- Which version of the rules above made a blueprint. Raise it whenever what
+-- gets copied changes: known blueprints made by an older version are studied
+-- again from their original when it is nearby (CSB_Update.lua).
+--   1  first versions (no v in the blueprint)
+--   2  roofs that only block rain, posts and railings
+CSB.CAPTURE_VERSION = 2
 
 CSB.MARGIN = 2          -- squares searched around the building (roofs hang over)
 CSB.ROOF_LEVELS = 3     -- levels searched above the top room for the roof

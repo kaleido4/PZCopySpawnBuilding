@@ -8,6 +8,7 @@
     "IGUI_CSB_TooBig": "This roof is too big to study as a structure.",
     "IGUI_CSB_StudyFailed": "There is nothing here to study.",
     "IGUI_CSB_Learned": "Learned: %1",
+    "IGUI_CSB_Updated": "Updated what you know: %1",
     "IGUI_CSB_BuildMenu": "Build studied building",
     "IGUI_CSB_Size": "%1 x %2, %3 levels",
     "IGUI_CSB_Built": "Built: %1",
