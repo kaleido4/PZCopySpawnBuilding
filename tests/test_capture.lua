@@ -274,6 +274,9 @@ end)
 ---------------------------------------------------------------------------
 
 defineSprite("floor_porch", { "solidfloor" })
+-- the real carport's tiles: its roof only blocks rain, its posts are railings
+defineSprite("roofs_30_10_16", { "ForceAmbient", "BlockRain", SnowTile = "x" })
+defineSprite("fixtures_railings_01_73", { "NeverCutaway", BlocksPlacement = "1" })
 
 local function buildRoofRoomCarport()
     resetWorld()
@@ -288,12 +291,17 @@ local function buildRoofRoomCarport()
             put(x, y, 0, "blends_street_01_80")
         end
         for y = 30, 33 do
-            put(x, y, 1, "roof")
+            put(x, y, 1, "roofs_30_10_16")
         end
     end
-    for _, p in ipairs({ { 45, 30 }, { 48, 30 }, { 45, 33 }, { 48, 33 } }) do
-        put(p[1], p[2], 0, "post")
+    -- railing posts: on the west side under the roof, on the east side just
+    -- outside it; a chair someone left there
+    for _, p in ipairs({ { 45, 31 }, { 45, 33 }, { 49, 31 }, { 49, 33 } }) do
+        put(p[1], p[2], 0, "fixtures_railings_01_73")
     end
+    put(51, 31, 0, "fixtures_railings_01_73")
+    defineSprite("lawn_chair", { IsMoveAble = "1" })
+    put(46, 32, 0, "lawn_chair")
     return newBuildingDef(5, { { x = 45, y = 30, w = 4, h = 4, z = 1, name = "emptyoutside", outside = true } })
 end
 
@@ -318,11 +326,12 @@ test("studying it copies from the ground: roof, posts and the pad under the roof
     eq(bp.id, "45_30")
     eq(bp.name, "Shelter")
     eq(bp.area, 16)
-    eq(countSprite(bp, "roof"), 16, "roof")
-    eq(countSprite(bp, "post"), 4, "posts")
+    eq(countSprite(bp, "roofs_30_10_16"), 16, "roof")
+    eq(countSprite(bp, "fixtures_railings_01_73"), 4, "posts, both sides, not the one further out")
     eq(countSprite(bp, "blends_street_01_80"), 16, "pad under the roof, not the part in front")
     eq(countSprite(bp, "blends_natural_01_16"), 0, "grass")
-    eq(bp.w, 4, "w") eq(bp.h, 4, "h") eq(bp.levels, 2, "levels")
+    eq(countSprite(bp, "lawn_chair"), 0, "chair")
+    eq(bp.w, 5, "w, the east posts included") eq(bp.h, 4, "h") eq(bp.levels, 2, "levels")
 end)
 
 ---------------------------------------------------------------------------

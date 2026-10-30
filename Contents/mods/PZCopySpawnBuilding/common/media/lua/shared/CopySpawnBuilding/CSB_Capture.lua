@@ -24,8 +24,8 @@
     ground level up.
 
     Each study writes a report to Zomboid/Lua/CopySpawnBuilding_last_study.txt:
-    the pieces kept, and what was left behind on the squares it covers with
-    the tile's flags, to see why a piece was or was not copied.
+    the pieces kept, and what was left behind on and next to the squares it
+    covers with the tile's flags, to see why a piece was or was not copied.
 --]]
 
 require "CopySpawnBuilding/CSB_Core"
@@ -142,8 +142,8 @@ end
     Goes over the squares from (x1, y1) to (x2, y2), margin included, on the
     levels groundZ to topZ, and keeps the pieces that belong (CSB.belongs
     with ctx; ctx.foreign is filled in per column here). Returns the tiles
-    in world coordinates. What it leaves behind on covered columns goes to
-    CSB.Capture.lastSkipped, for the report.
+    in world coordinates. What it leaves behind on or next to covered
+    columns goes to CSB.Capture.lastSkipped, for the report.
 --]]
 local function scan(x1, y1, x2, y2, groundZ, topZ, ctx, ownId)
     local cell = getCell()
@@ -175,7 +175,7 @@ local function scan(x1, y1, x2, y2, groundZ, topZ, ctx, ownId)
                                 kept = true
                             end
                         end
-                        if not kept and ctx.covered(x, y) and obj:getSprite()
+                        if not kept and CSB.near(x, y, 1, ctx.covered) and obj:getSprite()
                             and not instanceof(obj, "IsoWorldInventoryObject") then
                             table.insert(skipped, { x = x, y = y, z = z, obj = obj, kind = kind })
                         end
@@ -356,7 +356,7 @@ function CSB.Capture.reportLines(label, bp, why)
         end
     end
     local skipped = CSB.Capture.lastSkipped or {}
-    table.insert(lines, "Left behind on the squares it covers (" .. #skipped .. "), world x, y, z:")
+    table.insert(lines, "Left behind on and next to the squares it covers (" .. #skipped .. "), world x, y, z:")
     for _, s in ipairs(skipped) do
         local sprite = s.obj:getSprite()
         table.insert(lines, "  " .. s.x .. "," .. s.y .. "," .. s.z .. "  " .. sprite:getName()

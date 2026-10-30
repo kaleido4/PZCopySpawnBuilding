@@ -10,13 +10,15 @@
     blood stay behind.
 
     Which pieces belong to the building:
-      * everything structural on one of its room squares;
+      * everything structural on one of its room squares (see CSB.classify);
       * anything structural on a square the building covers on some level,
         seen from above (gable walls and attic pieces sit on the level above
         the top room);
       * walls, doors and windows sit on a square's west or north edge, so the
         building's east and south walls are on the squares just outside it:
         an edge piece belongs when the square across its edge is covered;
+        posts and railings with no edge flags belong on the squares just east
+        or south of it too;
       * roofs hang over the walls: a roof piece belongs within 2 squares of
         the building;
       * floors outside the rooms count only above the ground and over the
@@ -93,9 +95,27 @@ local function hasAny(props, flags)
     return false
 end
 
--- What part of a building the object is: "floor", "wall", "door", "window",
--- "frame" (window frame), "stairs", "roof", "overlay", or nil when it is not
--- part of the structure.
+-- Whether the tile is a piece of roof. Roof tiles differ: some have a roof
+-- group or are eaves, others (roofs_30, a carport's) only block rain.
+local function roofProps(props, name)
+    return props:has("RoofGroup") or props:has(IsoFlagType.isEave) or props:has(IsoFlagType.BlockRain)
+        or (name ~= nil and string.sub(name, 1, 6) == "roofs_")
+end
+
+-- Objects that are not part of a structure even though they cannot be picked
+-- up like furniture.
+local NOT_FIXTURES = { "IsoLightSwitch", "IsoCurtain", "IsoGenerator" }
+
+--[[
+    What part of a building the object is: "floor", "wall", "door", "window",
+    "frame" (window frame), "stairs", "roof", "overlay" (trim), "fixture", or
+    nil when it is not part of the structure.
+
+    A fixture is any other tile that cannot be picked up (no IsMoveAble):
+    railings and the posts holding up a carport's roof (fixtures_railings,
+    with no wall flags), gutters, poles. Furniture can be picked up and is
+    left behind, like containers, plants, trees and items.
+--]]
 function CSB.classify(obj)
     if instanceof(obj, "IsoWorldInventoryObject") or instanceof(obj, "IsoTree") then return nil end
     local sprite = obj:getSprite()
@@ -111,20 +131,24 @@ function CSB.classify(obj)
     if obj:isStairsObject() then return "stairs" end
     -- before roofs: a flat roof you can walk on is the floor of its square
     if obj:isFloor() or props:has(F.solidfloor) then return "floor" end
-    if props:has("RoofGroup") or props:has(F.isEave) then return "roof" end
+    if roofProps(props, name) then return "roof" end
     if obj:isWall() or obj:isWallSE()
         or hasAny(props, { F.WallN, F.WallW, F.WallNW, F.WallSE, F.DoorWallN, F.DoorWallW, F.WallNTrans, F.WallWTrans }) then
         return "wall"
     end
     if props:has(F.WallOverlay) then return "overlay" end
-    return nil
+    if props:has("IsMoveAble") then return nil end
+    for _, class in ipairs(NOT_FIXTURES) do
+        if instanceof(obj, class) then return nil end
+    end
+    return "fixture"
 end
 
 -- Whether the object is a piece of roof (a flat roof you can walk on too).
 function CSB.isRoofPiece(obj)
     local sprite = obj:getSprite()
     local props = sprite and sprite:getProperties()
-    return props ~= nil and (props:has("RoofGroup") or props:has(IsoFlagType.isEave))
+    return props ~= nil and roofProps(props, sprite:getName())
 end
 
 function CSB.naturalFloor(name)
@@ -174,6 +198,11 @@ function CSB.belongs(piece, x, y, z, ctx)
         end
         if covered(x, y) then return true end
         if kind == "stairs" then return CSB.near(x, y, 1, covered) end
+        -- posts and railings on the east and south sides stand on the
+        -- squares just outside, like walls
+        if kind == "fixture" then
+            return covered(x - 1, y) or covered(x, y - 1) or covered(x - 1, y - 1)
+        end
     end
     if edges.W and covered(x - 1, y) then return true end
     if edges.N and covered(x, y - 1) then return true end

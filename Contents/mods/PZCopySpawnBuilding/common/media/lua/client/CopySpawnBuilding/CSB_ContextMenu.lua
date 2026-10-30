@@ -40,7 +40,7 @@ local function addStudyOption(context, player, text, target, square, id, problem
         option.notAvailable = true
         tooltip.description = getText(problem)
     elseif id and CSB.Store.knows(player, id) then
-        option.notAvailable = true
+        -- studying it again replaces the blueprint, e.g. after it changed
         tooltip.description = getText("IGUI_CSB_AlreadyKnown")
     else
         tooltip.description = getText(text .. "Tooltip")
