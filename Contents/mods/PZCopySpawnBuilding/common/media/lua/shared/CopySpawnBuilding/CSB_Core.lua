@@ -19,8 +19,8 @@
         an edge piece belongs when the square across its edge is covered;
         posts and railings with no edge flags belong on the squares just east
         or south of it too;
-      * roofs hang over the walls: a roof piece belongs within 2 squares of
-        the building;
+      * roofs hang over the walls: a roof piece above the ground belongs
+        within 2 squares of the building (on the ground, only over it);
       * floors outside the rooms count only above the ground and over the
         building (flat roofs, balconies), not porches or sidewalks.
     Over another building (a square of it, or the roof above it), pieces only
@@ -55,7 +55,8 @@ CSB = CSB or {}
 -- again from their original when it is nearby (CSB_Update.lua).
 --   1  first versions (no v in the blueprint)
 --   2  roofs that only block rain, posts and railings
-CSB.CAPTURE_VERSION = 2
+--   3  no roof pieces on the ground next to it, no furniture as fixtures
+CSB.CAPTURE_VERSION = 3
 
 CSB.MARGIN = 2          -- squares searched around the building (roofs hang over)
 CSB.ROOF_LEVELS = 3     -- levels searched above the top room for the roof
@@ -117,15 +118,21 @@ end
 -- up like furniture.
 local NOT_FIXTURES = { "IsoLightSwitch", "IsoCurtain", "IsoGenerator" }
 
+-- Tile properties of furniture and things standing around, which fixtures
+-- (railings, posts: only BlocksPlacement) do not have: a name (a log stack is
+-- a "Stack"), a place in a multi-tile object (the other half of a log stack
+-- is a container), or scrap to take apart.
+local FURNITURE_PROPS = { "IsMoveAble", "CustomName", "SpriteGridPos", "CanScrap" }
+
 --[[
     What part of a building the object is: "floor", "wall", "door", "window",
     "frame" (window frame), "stairs", "roof", "overlay" (trim), "fixture", or
     nil when it is not part of the structure.
 
-    A fixture is any other tile that cannot be picked up (no IsMoveAble):
+    A fixture is any other tile that is not furniture (FURNITURE_PROPS):
     railings and the posts holding up a carport's roof (fixtures_railings,
-    with no wall flags), gutters, poles. Furniture can be picked up and is
-    left behind, like containers, plants, trees and items.
+    with no wall flags), gutters, poles. Furniture is left behind, like
+    containers, plants, trees and items.
 --]]
 function CSB.classify(obj)
     if instanceof(obj, "IsoWorldInventoryObject") or instanceof(obj, "IsoTree") then return nil end
@@ -148,7 +155,9 @@ function CSB.classify(obj)
         return "wall"
     end
     if props:has(F.WallOverlay) then return "overlay" end
-    if props:has("IsMoveAble") then return nil end
+    for _, prop in ipairs(FURNITURE_PROPS) do
+        if props:has(prop) then return nil end
+    end
     for _, class in ipairs(NOT_FIXTURES) do
         if instanceof(obj, class) then return nil end
     end
@@ -202,7 +211,11 @@ function CSB.belongs(piece, x, y, z, ctx)
     local kind, edges, covered = piece.kind, piece.edges, ctx.covered
     if ctx.room(x, y, z) then return true end
     if not ctx.foreign then
-        if kind == "roof" then return CSB.near(x, y, CSB.MARGIN, covered) end
+        -- eaves hang over the walls at the roof's height; roof pieces on the
+        -- ground next to it are a neighbour's
+        if kind == "roof" then
+            return covered(x, y) or (z > ctx.groundZ and CSB.near(x, y, CSB.MARGIN, covered))
+        end
         if kind == "floor" then
             if z > ctx.groundZ then return covered(x, y) end
             return ctx.groundFloors == true and covered(x, y) and not CSB.naturalFloor(piece.name)

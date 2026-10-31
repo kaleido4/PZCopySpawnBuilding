@@ -302,6 +302,13 @@ local function buildRoofRoomCarport()
     put(51, 31, 0, "fixtures_railings_01_73")
     defineSprite("lawn_chair", { IsMoveAble = "1" })
     put(46, 32, 0, "lawn_chair")
+    -- half a log stack under it, and the neighbour's roof trim on the ground
+    -- 2 squares off its corner (seen at a woodshed: camping_01_24,
+    -- roofs_accents_01_45)
+    defineSprite("camping_01_24", { "solidtrans", CanScrap = "", CustomName = "Stack", SpriteGridPos = "0,0" })
+    defineSprite("roofs_accents_01_45", { "WestRoofB", "attachedN" })
+    put(47, 31, 0, "camping_01_24")
+    put(50, 28, 0, "roofs_accents_01_45")
     return newBuildingDef(5, { { x = 45, y = 30, w = 4, h = 4, z = 1, name = "emptyoutside", outside = true } })
 end
 
@@ -331,6 +338,8 @@ test("studying it copies from the ground: roof, posts and the pad under the roof
     eq(countSprite(bp, "blends_street_01_80"), 16, "pad under the roof, not the part in front")
     eq(countSprite(bp, "blends_natural_01_16"), 0, "grass")
     eq(countSprite(bp, "lawn_chair"), 0, "chair")
+    eq(countSprite(bp, "camping_01_24"), 0, "log stack")
+    eq(countSprite(bp, "roofs_accents_01_45"), 0, "neighbour's roof trim on the ground")
     eq(bp.w, 5, "w, the east posts included") eq(bp.h, 4, "h") eq(bp.levels, 2, "levels")
 end)
 

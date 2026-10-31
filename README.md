@@ -18,13 +18,13 @@ Map buildings are not stored as buildings: the map is a list of tiles per square
 
 | Kept | Left behind |
 |---|---|
-| floors, walls, door frames, doors, windows, window frames, stairs, roofs, wall trim, posts and railings (anything that cannot be picked up) | furniture (anything that can be picked up), containers, loot, plants, trees, grass, blood, light switches, curtains |
+| floors, walls, door frames, doors, windows, window frames, stairs, roofs, wall trim, posts and railings (unnamed tiles that are not part of furniture) | furniture (anything that can be picked up, has a name like a log "Stack", or is part of a multi-tile object), containers, loot, plants, trees, grass, blood, light switches, curtains |
 
 Which pieces belong to the building:
 
 - everything structural on one of its room squares, and on any square the building covers on some level (gable walls sit on the level above the top room);
 - walls, doors and windows sit on a square's west or north edge, so the east and south walls are on the squares just outside the building: an edge piece belongs when the square across its edge is covered; posts and railings with no edge flags belong on the squares just east or south of it too;
-- roofs within 2 squares of the building (eaves hang over the walls);
+- roofs within 2 squares of the building, above the ground (eaves hang over the walls at the roof's height; roof trim on the ground next to it is a neighbour's);
 - floors outside the rooms only above the ground and over the building (flat roofs, balconies), not porches or sidewalks;
 - over another building, only pieces on the shared edge.
 
