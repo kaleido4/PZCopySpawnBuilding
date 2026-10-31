@@ -18,7 +18,15 @@ require "CopySpawnBuilding/CSB_Core"
 
 CSB.Store = {}
 
+-- Goes up whenever a blueprint is put, learned or forgotten, so the Studied
+-- buildings window knows to read the list again.
+CSB.Store.revision = 0
+
 local KEY = "CopySpawnBuilding"
+
+local function changed()
+    CSB.Store.revision = CSB.Store.revision + 1
+end
 
 function CSB.Store.data()
     local data = ModData.getOrCreate(KEY)
@@ -48,6 +56,7 @@ end
 
 function CSB.Store.put(bp)
     CSB.Store.data().blueprints[bp.id] = bp
+    changed()
 end
 
 function CSB.Store.get(id)
@@ -67,10 +76,12 @@ end
 
 function CSB.Store.learn(player, bp)
     knownTable(player)[bp.id] = true
+    changed()
 end
 
 function CSB.Store.forget(player, id)
     knownTable(player)[id] = nil
+    changed()
 end
 
 -- The blueprints the character knows, sorted by name.

@@ -5,9 +5,9 @@ Project Zomboid (Build 42) mod: study a building you find on the map, then build
 - Right-click a building (or one of its walls) and choose **Study building**. Your character looks it over with the plans in hand; bigger buildings take longer.
 - Under a roof that is not part of a building (carport, porch roof, shelter), choose **Study structure** instead.
 - You can right-click a roof or an upper floor where you see it: one level up is drawn 3 squares further north-west on screen, so the click lands on the ground square 3 squares north-west of the roof, and the mod looks there too (`CSB.screenStack`).
-- Right-click anywhere and choose **Build studied building**, then pick one. A see-through copy follows the cursor, green where it fits and red where it does not. Click to build it.
+- Right-click anywhere and choose **Studied buildings** to see the buildings you know, each with a picture of it. Pick one for a big picture (**-** and **+** step through its levels, to look inside under the roof), then **Build** it (or double-click it). A see-through copy follows the cursor, green where it fits and red where it does not. Click to build it.
 - Right-click a copy you built (on it, next to it, or on its roof) and choose **Remove spawned building** to take it down again and put the ground back.
-- **Forget studied building** takes a building off your list.
+- **Forget** in the Studied buildings window takes a building off your list.
 - Already know a building and studying it again? That updates what you know. Buildings learned with an older version of the mod are updated by themselves: once a game minute, when the original is loaded nearby, it is studied again and "Updated what you know" shows (`CSB_Update.lua`, `CSB.CAPTURE_VERSION`).
 
 Work in progress (milestone 1 of 4): building is free and single player only. Planned next: a Buildings tab in the build window (vanilla and Neat Building), sizes and materials with costs, sandbox options, multiplayer, rotation.
@@ -83,6 +83,10 @@ Rooms do not matter for this: a copied carport or shelter is a roof over animals
 
 Pieces are made the way the map loader and the moveables code make them: doors as `IsoDoor`, windows as `IsoWindow`, window frames as `IsoWindowFrame`, everything else as a plain `IsoObject`. Map walls are plain objects, not the `IsoThumpable` walls players build, so zombies cannot break a copy's walls, the same as the original.
 
+## Pictures
+
+The pictures in the Studied buildings window are the blueprint's own tiles, drawn small the way the game draws the map (`CSB_Picture.lua`): level by level from the ground up, each level's floors first, then the rest from the back to the front. A tile's texture is cut from a 128 x 256 frame that stands on its square (the floor is the frame's bottom 64 pixels), and one level up is 192 pixels higher. Each picture is laid out once per blueprint and scaled to fit its box, never bigger than in the game.
+
 ## Files
 
 | File | |
@@ -94,6 +98,8 @@ Pieces are made the way the map loader and the moveables code make them: doors a
 | `shared/CopySpawnBuilding/CSB_Store.lua` | blueprints in global mod data, known buildings on the character |
 | `client/CopySpawnBuilding/CSB_StudyAction.lua` | the Study building timed action |
 | `client/CopySpawnBuilding/CSB_ContextMenu.lua` | right-click options |
+| `client/CopySpawnBuilding/CSB_Window.lua` | the Studied buildings window |
+| `client/CopySpawnBuilding/CSB_Picture.lua` | pictures of blueprints (unit-tested) |
 | `server/CopySpawnBuilding/CSB_Cursor.lua` | placement cursor (next to the game's `ISBuildingObject`, which loads from `server/`) |
 
 ## Tests

@@ -6,13 +6,13 @@
         (carport, porch roof, shelter);
       * "Remove spawned building" on or next to a copy that was built
         (CSB.Spawn.copyAt);
-      * "Build studied building" with the buildings the character knows, which
-        starts the placement cursor (CSB_Cursor.lua);
-      * "Forget studied building" to take one off that list.
+      * "Studied buildings" when the character knows some, which opens the
+        window to build or forget them (CSB_Window.lua).
 --]]
 
 require "CopySpawnBuilding/CSB_Store"
 require "CopySpawnBuilding/CSB_StudyAction"
+require "CopySpawnBuilding/CSB_Window"
 
 CSB.Menu = {}
 
@@ -22,10 +22,6 @@ local function clickedSquare(worldobjects)
         if sq then return sq end
     end
     return nil
-end
-
-local function describe(bp)
-    return getText("IGUI_CSB_Size", bp.w, bp.h, bp.levels)
 end
 
 -- target: { def = BuildingDef } or { structure = found }, see CSB_StudyAction
@@ -50,28 +46,9 @@ local function addStudyOption(context, player, text, target, square, id, problem
     option.toolTip = tooltip
 end
 
-function CSB.Menu.onBuild(player, bp)
-    getCell():setDrag(CSB_Cursor:new(player, bp), player:getPlayerNum())
-end
-
 function CSB.Menu.onRemove(player, record)
     CSB.Spawn.remove(record)
     player:setHaloNote(getText("IGUI_CSB_Removed", record.name or ""))
-end
-
-function CSB.Menu.onForget(player, bp)
-    CSB.Store.forget(player, bp.id)
-    player:setHaloNote(getText("IGUI_CSB_Forgot", bp.name))
-end
-
--- A submenu with one option per known building.
-local function knownSubMenu(context, player, text, onPick, known)
-    local parent = context:addOption(getText(text))
-    local subMenu = ISContextMenu:getNew(context)
-    context:addSubMenu(parent, subMenu)
-    for _, bp in ipairs(known) do
-        subMenu:addOption(bp.name .. " (" .. describe(bp) .. ")", player, onPick, bp)
-    end
 end
 
 function CSB.Menu.fill(playerNum, context, worldobjects, test)
@@ -104,8 +81,7 @@ function CSB.Menu.fill(playerNum, context, worldobjects, test)
 
     local known = CSB.Store.list(player)
     if #known > 0 then
-        knownSubMenu(context, player, "IGUI_CSB_BuildMenu", CSB.Menu.onBuild, known)
-        knownSubMenu(context, player, "IGUI_CSB_ForgetMenu", CSB.Menu.onForget, known)
+        context:addOption(getText("IGUI_CSB_WindowMenu", #known), player, CSB.Window.show)
     end
 end
 

@@ -25,6 +25,9 @@ end
 
 ISBaseTimedAction = class()
 ISBuildingObject = class()
+ISCollapsableWindow = class()
+ISScrollingListBox = class()
+ISPanel = class()
 local added = {}
 Events = setmetatable({}, { __index = function(_, name)
     return { Add = function(fn) added[name] = fn end }
@@ -42,6 +45,8 @@ local FILES = {
     "shared/CopySpawnBuilding/CSB_Capture.lua",
     "shared/CopySpawnBuilding/CSB_Spawn.lua",
     "client/CopySpawnBuilding/CSB_StudyAction.lua",
+    "client/CopySpawnBuilding/CSB_Picture.lua",
+    "client/CopySpawnBuilding/CSB_Window.lua",
     "client/CopySpawnBuilding/CSB_ContextMenu.lua",
     "client/CopySpawnBuilding/CSB_Update.lua",
     "server/CopySpawnBuilding/CSB_Cursor.lua",
@@ -53,6 +58,7 @@ test("every mod file loads", function()
     end
     truthy(CSB_StudyAction, "study action")
     truthy(CSB_Cursor, "cursor")
+    truthy(CSB_Window and CSB.Window.show, "window")
     truthy(added.OnFillWorldObjectContextMenu == CSB.Menu.fill, "context menu hooked")
 end)
 
@@ -88,6 +94,22 @@ test("a forgotten building leaves the list", function()
     CSB.Store.learn(p, CSB.Store.get("x"))
     CSB.Store.forget(p, "x")
     eq(#CSB.Store.list(p), 0)
+end)
+
+test("studying, learning and forgetting tell the window to read the list again", function()
+    local p = newPlayer()
+    local before = CSB.Store.revision
+    CSB.Store.put({ id = "r", name = "Shed", tiles = {} })
+    truthy(CSB.Store.revision > before, "put")
+    before = CSB.Store.revision
+    CSB.Store.learn(p, CSB.Store.get("r"))
+    truthy(CSB.Store.revision > before, "learn")
+    before = CSB.Store.revision
+    CSB.Store.forget(p, "r")
+    truthy(CSB.Store.revision > before, "forget")
+    before = CSB.Store.revision
+    CSB.Store.list(p)
+    eq(CSB.Store.revision, before, "reading the list changes nothing")
 end)
 
 finish("Loading and storage")

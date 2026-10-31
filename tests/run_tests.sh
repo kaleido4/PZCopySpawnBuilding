@@ -18,4 +18,5 @@ cd "$PZ_DIR"
     "$ROOT/tests/test_core.lua" \
     "$ROOT/tests/test_capture.lua" \
     "$ROOT/tests/test_spawn.lua" \
+    "$ROOT/tests/test_picture.lua" \
     "$ROOT/tests/test_load.lua"
